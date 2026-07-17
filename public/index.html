@@ -3,18 +3,29 @@
 <head>
     <meta charset="UTF-8">
     <title>Playlist Automation Hub</title>
+    <style>
+        body { font-family: sans-serif; background: #121212; color: #fff; padding: 20px; text-align: center; }
+        .box { background: #1e1e1e; padding: 20px; border-radius: 12px; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        input, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+        input { background: #2a2a2a; color: white; border: 1px solid #444; }
+        button { background: #007aff; color: white; border: none; font-weight: bold; cursor: pointer; }
+        .display-panel { background: #2a2a2a; padding: 15px; border-radius: 8px; margin: 15px 0; text-align: left; }
+    </style>
 </head>
 <body>
-    <div style="text-align:center; padding: 50px;">
-        <h2>Playlist Automation Hub</h2>
+    <div class="box">
+        <h2>📺 Playlist Automation Hub</h2>
         <input type="text" id="playlistUrl" placeholder="Paste YouTube Playlist Link...">
         <button onclick="loadPlaylist()">Load Playlist</button>
-        <div id="status">Ready</div>
+        <div class="display-panel" id="output">Status: Ready</div>
     </div>
 
     <script>
         async function loadPlaylist() {
             const url = document.getElementById('playlistUrl').value;
+            const output = document.getElementById('output');
+            output.innerText = "Loading...";
+            
             try {
                 const response = await fetch('/api/load-playlist', {
                     method: 'POST',
@@ -22,13 +33,15 @@
                     body: JSON.stringify({ playlistUrl: url })
                 });
                 const data = await response.json();
+                
+                // NO "contents" variable used here anywhere.
                 if(data.success) {
-                    alert("Loaded " + data.tracks.length + " songs!");
+                    output.innerText = "Success! Loaded " + data.tracks.length + " songs.";
                 } else {
-                    alert("Error: " + data.error);
+                    output.innerText = "Error: " + (data.error || "Unknown");
                 }
             } catch (err) {
-                alert("Fetch Error: " + err.message);
+                output.innerText = "Fetch Error: " + err.message;
             }
         }
     </script>
