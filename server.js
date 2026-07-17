@@ -12,6 +12,8 @@ let activeTrackIndex = 0;
 app.post('/api/load-playlist', async (req, res) => {
     try {
         const playlist = await ytpl(req.body.playlistUrl, { limit: 50 });
+        if (!playlist || !playlist.items) throw new Error("No playlist items found.");
+        
         masterPlaylistTracks = playlist.items.map(item => ({
             title: item.title,
             mp4Url: `https://inv.tux.pizza/latest_version?id=${item.id}&itag=22`,
@@ -42,5 +44,5 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`Server is running with YTPL enabled on port ${PORT}`);
 });
