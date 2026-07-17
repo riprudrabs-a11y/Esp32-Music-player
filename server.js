@@ -9,67 +9,79 @@ app.use(express.static(path.join(__dirname, 'public')));
 let masterPlaylistTracks = [];
 let activeTrackIndex = 0;
 
-// Helper to isolate the playlist ID
 function getPlaylistId(url) {
     const match = url.match(/[&?]list=([^&]+)/);
     return match ? match[1] : null;
 }
 
-// 1. Endpoint that dynamically grabs the songs using a stable API
+// 1. EXTENSIVE DEBUG PLAYLIST LOADER
 app.post('/api/load-playlist', async (req, res) => {
+    console.log("\n=== NEW PLAYLIST REQUEST INITIATED ===");
     const { playlistUrl } = req.body;
+    console.log("Step 1: Received URL -", playlistUrl);
+    
     const playlistId = getPlaylistId(playlistUrl);
+    console.log("Step 2: Extracted ID -", playlistId);
     
     if (!playlistId) {
-        return res.status(400).json({ success: false, error: "Invalid Playlist URL" });
+        console.log("FAIL: Invalid URL formatting.");
+        return res.status(400).json({ success: false, error: "Cannot find 'list=' in your URL." });
     }
 
     try {
-        // Using Piped API - highly stable for fetching YouTube metadata
-        const apiUrl = `https://pipedapi.kavin.rocks/playlists/${playlistId}`;
+        // Using a highly stable Piped instance
+        const apiUrl = `https://pipedapi.tokhmi.xyz/playlists/${playlistId}`;
+        console.log("Step 3: Contacting API -", apiUrl);
         
         const response = await fetch(apiUrl, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
         });
         
-        if (!response.ok) throw new Error("Playlist API rejected the request");
+        console.log(`Step 4: API Responded with Status Code: ${response.status}`);
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.log("FAIL: API Rejected Request. Reason:", errorText);
+            throw new Error(`API returned HTTP ${response.status}: ${errorText}`);
+        }
 
         const parsedData = await response.json();
+        console.log("Step 5: Data parsed successfully.");
+        console.log(" -> Playlist Name:", parsedData.name || "Unknown");
+        console.log(" -> Videos Found:", parsedData.relatedStreams ? parsedData.relatedStreams.length : 0);
         
-        // Check if the data has the video array
-        if (parsedData && parsedData.relatedStreams) {
+        if (parsedData && parsedData.relatedStreams && parsedData.relatedStreams.length > 0) {
             masterPlaylistTracks = parsedData.relatedStreams.map(video => {
-                // Piped returns URLs like "/watch?v=12345678901", we just need the ID part
                 const videoId = video.url.split('v=')[1];
-                
                 return {
                     title: video.title,
-                    // Highly stable stream proxies for MP4 (Video) and MP3 (Audio)
                     mp4Url: `https://inv.tux.pizza/latest_version?id=${videoId}&itag=22`,
                     mp3Url: `https://inv.tux.pizza/latest_version?id=${videoId}&itag=140`
                 };
             });
 
             activeTrackIndex = 0;
-            console.log(`Successfully loaded ${masterPlaylistTracks.length} tracks!`);
+            console.log(`Step 6: SUCCESS! Loaded ${masterPlaylistTracks.length} tracks into memory.`);
             return res.json({ success: true, tracks: masterPlaylistTracks });
         }
         
-        res.status(500).json({ success: false, error: "No videos found. Is the playlist Private?" });
+        console.log("FAIL: API connection worked, but video array was empty.");
+        res.status(500).json({ success: false, error: "Playlist data returned empty. API might be blocking large playlists." });
         
     } catch (error) {
-        console.error("Server Error:", error.message);
-        res.status(500).json({ success: false, error: "Failed to pull playlist from YouTube." });
+        console.error("=== CRITICAL SERVER ERROR ===");
+        console.error(error.message);
+        res.status(500).json({ success: false, error: `Debug Log: ${error.message}` });
     }
 });
 
-// 2. Syncs up the dashboard player state
+// 2. State Tracker
 app.post('/api/update-state', (req, res) => {
     activeTrackIndex = req.body.currentTrackIndex;
     res.json({ success: true });
 });
 
-// 3. MICROCONTROLLER ENDPOINT: ESP32 grabs the raw MP3 link here
+// 3. MICROCONTROLLER ENDPOINT
 app.get('/api/micro-view', (req, res) => {
     if (masterPlaylistTracks.length === 0 || activeTrackIndex >= masterPlaylistTracks.length) {
         return res.json({ status: "idle", currentTrackTitle: "None", mp3Url: "" });
@@ -88,5 +100,5 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server live on port ${PORT}`);
+    console.log(`Server live on port ${PORT} - DEBUG MODE ACTIVE`);
 });
