@@ -51,6 +51,16 @@ async function fetchPlaylist(playlistUrl, limit) {
   return result;
 }
 
+function successResponse(data) {
+  // Provide multiple keys so different clients (old/new) work: playlist, contents, tracks
+  return {
+    success: true,
+    playlist: data,
+    contents: data,
+    tracks: Array.isArray(data && data.tracks) ? data.tracks : []
+  };
+}
+
 // POST-based API (keeps compatibility with existing clients)
 app.post('/api/load-playlist', async (req, res) => {
   const playlistUrl = req.body && req.body.playlistUrl;
@@ -66,7 +76,7 @@ app.post('/api/load-playlist', async (req, res) => {
   try {
     console.log(`Attempting to load playlist: ${playlistUrl} (limit=${limit})`);
     const data = await fetchPlaylist(playlistUrl, limit);
-    res.json({ success: true, playlist: data });
+    res.json(successResponse(data));
   } catch (err) {
     console.error('CRITICAL ERROR IN LOAD-PLAYLIST:', err && err.message ? err.message : err);
     res.status(500).json({ success: false, error: (err && err.message) || String(err) });
@@ -89,7 +99,7 @@ app.get('/api/load-playlist', async (req, res) => {
   try {
     console.log(`Attempting to load playlist (GET): ${playlistUrl} (limit=${limit})`);
     const data = await fetchPlaylist(playlistUrl, limit);
-    res.json({ success: true, playlist: data });
+    res.json(successResponse(data));
   } catch (err) {
     console.error('CRITICAL ERROR IN LOAD-PLAYLIST (GET):', err && err.message ? err.message : err);
     res.status(500).json({ success: false, error: (err && err.message) || String(err) });

@@ -5,11 +5,13 @@
     <title>Playlist Automation Hub</title>
     <style>
         body { font-family: sans-serif; background: #121212; color: #fff; padding: 20px; text-align: center; }
-        .box { background: #1e1e1e; padding: 20px; border-radius: 12px; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .box { background: #1e1e1e; padding: 20px; border-radius: 12px; max-width: 800px; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
         input, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
         input { background: #2a2a2a; color: white; border: 1px solid #444; }
         button { background: #007aff; color: white; border: none; font-weight: bold; cursor: pointer; }
-        .display-panel { background: #2a2a2a; padding: 15px; border-radius: 8px; margin: 15px 0; text-align: left; }
+        .display-panel { background: #2a2a2a; padding: 15px; border-radius: 8px; margin: 15px 0; text-align: left; max-height: 400px; overflow: auto; }
+        .track { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .small { font-size: 13px; color: #bbb; }
     </style>
 </head>
 <body>
@@ -22,10 +24,11 @@
 
     <script>
         async function loadPlaylist() {
-            const url = document.getElementById('playlistUrl').value;
+            const url = document.getElementById('playlistUrl').value.trim();
             const output = document.getElementById('output');
+            if(!url) { output.innerText = 'Please paste a YouTube playlist URL.'; return; }
             output.innerText = "Loading...";
-            
+
             try {
                 const response = await fetch('/api/load-playlist', {
                     method: 'POST',
@@ -33,16 +36,33 @@
                     body: JSON.stringify({ playlistUrl: url })
                 });
                 const data = await response.json();
-                
-                // NO "contents" variable used here anywhere.
-                if(data.success) {
-                    output.innerText = "Success! Loaded " + data.tracks.length + " songs.";
+
+                if(!data) { output.innerText = 'Empty response from server.'; return; }
+
+                // Accept multiple shapes for compatibility
+                const tracks = data.tracks || (data.playlist && data.playlist.tracks) || (data.contents && data.contents.tracks) || [];
+
+                if(data.success && tracks.length > 0) {
+                    let html = `<div class="small">Loaded playlist. ${tracks.length} tracks (showing up to 100):</div>`;
+                    const max = Math.min(tracks.length, 100);
+                    for(let i=0;i<max;i++){
+                        const t = tracks[i];
+                        html += `<div class="track"><strong>${i+1}. ${escapeHtml(t.title||'Untitled')}</strong><div class="small">mp3: ${escapeHtml(t.mp3Url||'n/a')}<br>id: ${escapeHtml(t.id||'n/a')}</div></div>`;
+                    }
+                    output.innerHTML = html;
+                } else if(data.success && tracks.length === 0) {
+                    output.innerText = 'No tracks found in playlist.';
                 } else {
-                    output.innerText = "Error: " + (data.error || "Unknown");
+                    output.innerText = 'Error: ' + (data.error || 'Unknown error');
                 }
             } catch (err) {
-                output.innerText = "Fetch Error: " + err.message;
+                output.innerText = "Fetch Error: " + (err && err.message ? err.message : String(err));
             }
+        }
+
+        function escapeHtml(s) {
+            if(!s) return '';
+            return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         }
     </script>
 </body>
