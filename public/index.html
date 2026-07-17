@@ -1,106 +1,211 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Playlist Automation Hub</title>
-    <style>
-        body { font-family: sans-serif; background: #121212; color: #fff; padding: 20px; text-align: center; }
-        .box { background: #1e1e1e; padding: 20px; border-radius: 12px; max-width: 900px; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-        input, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
-        input { background: #2a2a2a; color: white; border: 1px solid #444; }
-        button { background: #007aff; color: white; border: none; font-weight: bold; cursor: pointer; }
-        .display-panel { background: #2a2a2a; padding: 15px; border-radius: 8px; margin: 15px 0; text-align: left; max-height: 400px; overflow: auto; }
-        .track { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
-        .small { font-size: 13px; color: #bbb; }
-        .error { background: #3a2a2a; padding: 12px; border-radius: 6px; color: #ffb3b3; }
-        .debug { background: #262626; padding: 10px; border-radius: 6px; color: #ddd; font-family: monospace; white-space: pre-wrap; }
-    </style>
+  <meta charset="utf-8" />
+  <title>📺 Playlist Automation Hub</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0f1113;
+      --card: #14181b;
+      --muted: #9aa4ad;
+      --accent: #0a84ff;
+      --ok: #2ecc71;
+      --err: #ff6b6b;
+      --glass: rgba(255,255,255,0.03);
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    html,body { height:100%; margin:0; background:var(--bg); color:#fff; display:flex; align-items:center; justify-content:center; }
+    .wrap { width:min(980px,96%); }
+    .card { background:var(--card); border-radius:12px; padding:20px; box-shadow: 0 8px 30px rgba(0,0,0,0.6); }
+    h1 { margin:0 0 12px 0; font-size:18px; display:flex; gap:8px; align-items:center; }
+    input[type=text], input[type=number] {
+      width:100%; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); color:#fff;
+      box-sizing:border-box; margin-bottom:8px;
+    }
+    .row { display:flex; gap:8px; margin-bottom:8px; }
+    button { background:var(--accent); color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600; }
+    button.secondary { background:transparent; border:1px solid rgba(255,255,255,0.06); color:var(--muted); font-weight:600; }
+    .panel { background:var(--glass); padding:12px; border-radius:10px; margin-top:12px; min-height:80px; }
+    .tracks { max-height:360px; overflow:auto; margin-top:10px; border-radius:8px; }
+    .track { padding:10px; border-bottom:1px solid rgba(255,255,255,0.03); display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
+    .track .meta { max-width:80%; }
+    .small { font-size:12px; color:var(--muted); }
+    .copy-btn { background:#222; border-radius:6px; padding:6px 8px; color:#ddd; border:1px solid rgba(255,255,255,0.03); cursor:pointer; }
+    .error { background:rgba(255,0,0,0.06); color:var(--err); padding:10px;border-radius:8px;margin-top:8px; }
+    .ok { background:rgba(0,255,0,0.04); color:var(--ok); padding:10px;border-radius:8px;margin-top:8px; }
+    .spinner { width:18px;height:18px;border-radius:50%; border:3px solid rgba(255,255,255,0.08); border-top-color:var(--accent); animation:spin 1s linear infinite; display:inline-block; vertical-align:middle; margin-right:8px; }
+    @keyframes spin{ to{ transform:rotate(360deg); } }
+    .pager { display:flex; gap:8px; align-items:center; margin-top:8px; }
+    .debug { font-family:monospace; font-size:12px; color:#ddd; background:#0b0b0b; padding:10px; border-radius:8px; white-space:pre-wrap; margin-top:10px; max-height:220px; overflow:auto; }
+  </style>
 </head>
 <body>
-    <div class="box">
-        <h2>📺 Playlist Automation Hub</h2>
-        <input type="text" id="playlistUrl" placeholder="Paste YouTube Playlist Link...">
-        <button onclick="loadPlaylist()">Load Playlist</button>
-        <div class="display-panel" id="output">Status: Ready</div>
+  <div class="wrap">
+    <div class="card">
+      <h1>📺 Playlist Automation Hub <span class="small">— fetch playlists for your ESP32</span></h1>
+
+      <input id="playlistUrl" type="text" placeholder="Paste YouTube playlist link (example: https://www.youtube.com/playlist?list=...)" />
+
+      <div class="row">
+        <input id="limit" type="number" min="1" max="500" value="50" style="width:120px" />
+        <button id="loadBtn">🔄 Load Playlist</button>
+        <button id="previewPlayBtn" class="secondary">▶️ Preview first</button>
+        <button id="copyAllBtn" class="secondary">📋 Copy all mp3 links</button>
+      </div>
+
+      <div class="panel" id="statusPanel">Status: Ready</div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+        <div class="small">Show results (page & limit)</div>
+        <div class="row" style="width:auto;">
+          <button id="prevPage" class="secondary">◀ Prev</button>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input id="page" type="number" min="1" value="1" style="width:80px" />
+            <div class="small">page</div>
+          </div>
+          <button id="nextPage" class="secondary">Next ▶</button>
+        </div>
+      </div>
+
+      <div class="tracks" id="tracks"></div>
+
+      <div id="debugWrap" style="margin-top:12px;">
+        <details>
+          <summary style="cursor:pointer;" class="small">🛠️ Show debug details</summary>
+          <div id="debug" class="debug">No debug info yet.</div>
+        </details>
+      </div>
     </div>
+  </div>
 
-    <script>
-        async function loadPlaylist() {
-            const url = document.getElementById('playlistUrl').value.trim();
-            const output = document.getElementById('output');
-            if(!url) { output.innerHTML = '<div class="error">Please paste a YouTube playlist URL.</div>'; return; }
-            output.innerHTML = 'Loading...';
+<script>
+  const loadBtn = document.getElementById('loadBtn');
+  const previewPlayBtn = document.getElementById('previewPlayBtn');
+  const copyAllBtn = document.getElementById('copyAllBtn');
+  const statusPanel = document.getElementById('statusPanel');
+  const tracksEl = document.getElementById('tracks');
+  const debugEl = document.getElementById('debug');
+  const pageInput = document.getElementById('page');
+  const limitInput = document.getElementById('limit');
+  const prevPage = document.getElementById('prevPage');
+  const nextPage = document.getElementById('nextPage');
 
-            try {
-                const response = await fetch('/api/load-playlist', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ playlistUrl: url })
-                });
+  function setStatus(txt, type) {
+    if(type === 'loading') statusPanel.innerHTML = '<span class="spinner"></span>' + txt;
+    else if(type === 'error') statusPanel.innerHTML = '<span class="error">'+txt+'</span>';
+    else statusPanel.innerHTML = '<div class="small">'+txt+'</div>';
+  }
 
-                let bodyText = null;
-                try { bodyText = await response.text(); } catch(e) { bodyText = null; }
+  function escapeHtml(s){ if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-                let data = null;
-                try { data = bodyText ? JSON.parse(bodyText) : null; } catch(e) { /* ignore */ }
+  async function loadPage() {
+    const url = document.getElementById('playlistUrl').value.trim();
+    if(!url){ setStatus('⚠️ Paste a playlist URL above.', 'error'); return; }
+    const limit = Number(limitInput.value) || 50;
+    const page = Math.max(1, Number(pageInput.value) || 1);
+    const start = (page - 1) * limit + 1;
+    setStatus(`Loading page ${page} (items ${start} - ${start + limit - 1})`, 'loading');
+    tracksEl.innerHTML = '';
 
-                if (response.ok && data && data.success) {
-                    const tracks = data.tracks || (data.playlist && data.playlist.tracks) || (data.contents && data.contents.tracks) || [];
-                    if(tracks.length === 0) {
-                        output.innerHTML = '<div class="error">Server returned success but no tracks were found in the playlist.</div>' + suggestionHtml();
-                        output.innerHTML += debugHtml(response.status, data, bodyText);
-                        return;
-                    }
-                    let html = `<div class="small">Loaded playlist. ${tracks.length} tracks (showing up to 100):</div>`;
-                    const max = Math.min(tracks.length, 100);
-                    for(let i=0;i<max;i++){
-                        const t = tracks[i];
-                        html += `<div class="track"><strong>${i+1}. ${escapeHtml(t.title||'Untitled')}</strong><div class="small">mp3: ${escapeHtml(t.mp3Url||'n/a')}<br>id: ${escapeHtml(t.id||'n/a')}</div></div>`;
-                    }
-                    output.innerHTML = html + debugHtml(response.status, data, bodyText);
-                } else {
-                    // Error path — build a helpful debug panel
-                    let errMsg = 'Unknown error';
-                    if (data && data.error) {
-                        if (typeof data.error === 'string') errMsg = data.error;
-                        else if (data.error.message) errMsg = data.error.message;
-                    } else if (!response.ok) {
-                        errMsg = `HTTP ${response.status} ${response.statusText}`;
-                    }
+    try {
+      // use start + limit query (server now supports start)
+      const encoded = encodeURIComponent(url);
+      const q = `/api/load-playlist?playlistUrl=${encoded}&start=${start}&limit=${limit}`;
+      const resp = await fetch(q);
+      const txt = await resp.text();
+      let data;
+      try { data = txt ? JSON.parse(txt) : null; } catch(e) { setStatus('⚠️ Invalid JSON from server','error'); debugEl.textContent = txt; return; }
 
-                    output.innerHTML = `<div class="error">Error: ${escapeHtml(errMsg)}</div>` + suggestionHtml();
-                    output.innerHTML += debugHtml(response.status, data, bodyText);
-                }
-            } catch (err) {
-                output.innerHTML = `<div class="error">Network or fetch error: ${escapeHtml(err && err.message ? err.message : String(err))}</div>` + suggestionHtml();
-            }
+      debugEl.textContent = `HTTP ${resp.status}\n${JSON.stringify(data, null, 2)}`;
+
+      if(resp.ok && data && data.success) {
+        const tracks = data.tracks || (data.playlist && data.playlist.tracks) || (data.contents && data.contents.tracks) || [];
+        if(tracks.length === 0) {
+          setStatus('ℹ️ No tracks returned on this page. Try a lower page number or bigger limit.', 'error');
+          tracksEl.innerHTML = '';
+          return;
         }
+        setStatus(`✅ Loaded ${tracks.length} tracks (page ${page}).`);
+        // render tracks
+        tracksEl.innerHTML = tracks.map((t,i) => {
+          const title = escapeHtml(t.title || 'Untitled');
+          const mp3 = escapeHtml(t.mp3Url || t.url || 'n/a');
+          return `<div class="track">
+                    <div class="meta"><strong>${start + i}. ${title}</strong><div class="small">${mp3}</div></div>
+                    <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+                      <button class="copy-btn" data-url="${mp3}" onclick="copyUrl(event)">📋 Copy</button>
+                      <a class="copy-btn" href="${t.mp3Url||t.url||'#'}" target="_blank">🔗 Open</a>
+                    </div>
+                  </div>`;
+        }).join('');
+      } else {
+        const err = data && data.error && data.error.message ? data.error.message : `HTTP ${resp.status}`;
+        setStatus(`❌ Error: ${err}`, 'error');
+      }
+    } catch (err) {
+      setStatus('⚠️ Network error: ' + (err && err.message ? err.message : String(err)), 'error');
+      debugEl.textContent = String(err);
+    }
+  }
 
-        function escapeHtml(s) {
-            if(!s) return '';
-            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        }
+  async function copyUrl(e) {
+    const btn = e.currentTarget;
+    const url = btn.getAttribute('data-url') || '';
+    try {
+      await navigator.clipboard.writeText(url);
+      btn.textContent = '✅ Copied';
+      setTimeout(()=> btn.textContent = '📋 Copy', 1500);
+    } catch(e) {
+      alert('Copy failed: ' + e.message);
+    }
+  }
 
-        function debugHtml(status, dataObj, rawText) {
-            let html = '<div style="margin-top:12px">';
-            html += '<details><summary style="cursor:pointer">Show debug details</summary>';
-            html += `<div class="debug">Status: ${status || 'n/a'}\n`;
-            if (dataObj) {
-                html += 'JSON Response:\n' + escapeHtml(JSON.stringify(dataObj, null, 2)) + '\n';
-                if (dataObj.error && dataObj.error.debugId) html += '\nServer debugId: ' + escapeHtml(dataObj.error.debugId) + '\n';
-            } else if (rawText) {
-                html += 'Raw Response:\n' + escapeHtml(rawText) + '\n';
-            } else {
-                html += 'No response body was returned.\n';
-            }
-            html += '\nLogs: Check your server logs (Render dashboard or server console) and search for the debugId above if present.';
-            html += '</div></details></div>';
-            return html;
-        }
+  loadBtn.addEventListener('click', ()=>{ pageInput.value = 1; loadPage(); });
+  prevPage.addEventListener('click', ()=>{ pageInput.value = Math.max(1, Number(pageInput.value||1)-1); loadPage(); });
+  nextPage.addEventListener('click', ()=>{ pageInput.value = Number(pageInput.value||1)+1; loadPage(); });
 
-        function suggestionHtml(){
-            return `<div class="small" style="margin-top:8px">Suggestions:\n<ul><li>Make sure the playlist is public and not age-restricted or private.</li><li>Try using a shorter limit (e.g., limit=5) and test with a known-public playlist.</li><li>If the server returns a debugId, check the server logs (Render dashboard &gt; Logs) and search that id.</li></ul></div>`;
-        }
-    </script>
+  previewPlayBtn.addEventListener('click', async ()=> {
+    // preview first track by opening it in new tab (browser will try to play)
+    const url = document.getElementById('playlistUrl').value.trim();
+    if(!url){ setStatus('⚠️ Paste a playlist URL above.', 'error'); return; }
+    const encoded = encodeURIComponent(url);
+    const q = `/api/load-playlist?playlistUrl=${encoded}&start=1&limit=1`;
+    setStatus('Previewing first track…', 'loading');
+    try {
+      const r = await fetch(q);
+      const data = await r.json();
+      if(data && data.success && data.tracks && data.tracks[0]) {
+        window.open(data.tracks[0].mp3Url || data.tracks[0].url, '_blank');
+        setStatus('Opened first track in new tab.');
+      } else {
+        setStatus('No track to preview.', 'error');
+      }
+    } catch(e){ setStatus('Preview failed: ' + e.message, 'error'); }
+  });
+
+  copyAllBtn.addEventListener('click', async ()=> {
+    // fetch page 1..N based on limit and page=1 only (user can use next to copy more pages)
+    const url = document.getElementById('playlistUrl').value.trim();
+    if(!url){ setStatus('⚠️ Paste a playlist URL above.', 'error'); return; }
+    setStatus('Fetching current page to copy links…', 'loading');
+    try {
+      const encoded = encodeURIComponent(url);
+      const q = `/api/load-playlist?playlistUrl=${encoded}&start=1&limit=${limitInput.value||50}`;
+      const r = await fetch(q);
+      const data = await r.json();
+      if(data && data.success) {
+        const links = (data.tracks||[]).map(t => t.mp3Url || t.url || '').filter(Boolean).join('\n');
+        await navigator.clipboard.writeText(links);
+        setStatus('✅ Copied current page mp3 links to clipboard.');
+      } else {
+        setStatus('Failed to fetch links to copy.', 'error');
+      }
+    } catch(e){ setStatus('Copy failed: ' + e.message, 'error'); }
+  });
+
+  // expose copyUrl to inline onclick
+  window.copyUrl = copyUrl;
+</script>
 </body>
 </html>
