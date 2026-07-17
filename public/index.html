@@ -22,7 +22,7 @@
         
         <input type="text" id="playlistUrl" placeholder="Paste YouTube Playlist Link here...">
         <input type="number" id="loopCount" placeholder="How many loops per song? (e.g., 3)" min="1">
-        <button onclick="loadPlaylist()">Load & Play Playlist</button>
+        <button id="loadBtn" onclick="loadPlaylist()">Load & Play Playlist</button>
 
         <div class="display-panel">
             <div><strong>Now Playing (MP4 Video):</strong></div>
@@ -45,23 +45,38 @@
         async function loadPlaylist() {
             const url = document.getElementById('playlistUrl').value;
             maxLoopsAllowed = parseInt(document.getElementById('loopCount').value) || 1;
+            const btn = document.getElementById('loadBtn');
             
             if(!url) return alert("Please paste a playlist link!");
 
-            const response = await fetch('/api/load-playlist', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ playlistUrl: url })
-            });
-            
-            const data = await response.json();
-            if(data.success && data.tracks.length > 0) {
-                tracks = data.tracks;
-                currentIndex = 0;
-                currentLoopsDone = 0;
-                playCurrentTrack();
-            } else {
-                alert("Could not load playlist tracks.");
+            btn.innerText = "Loading... Please Wait";
+            btn.style.background = "#ff9500";
+
+            try {
+                const response = await fetch('/api/load-playlist', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ playlistUrl: url })
+                });
+                
+                const data = await response.json();
+                
+                if(data.success && data.tracks.length > 0) {
+                    tracks = data.tracks;
+                    currentIndex = 0;
+                    currentLoopsDone = 0;
+                    btn.innerText = "Load & Play Playlist";
+                    btn.style.background = "#007aff";
+                    playCurrentTrack();
+                } else {
+                    btn.innerText = "Load & Play Playlist";
+                    btn.style.background = "#007aff";
+                    alert("DEBUG ERROR: \n" + (data.error || "Unknown Error"));
+                }
+            } catch (err) {
+                btn.innerText = "Load & Play Playlist";
+                btn.style.background = "#007aff";
+                alert("NETWORK ERROR: " + err.message);
             }
         }
 
