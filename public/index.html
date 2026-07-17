@@ -18,19 +18,14 @@
 </head>
 <body>
     <div class="box">
-        <h2>📺 YouTube Playlist Automation Engine</h2>
-        
-        <input type="text" id="playlistUrl" placeholder="Paste YouTube Playlist Link here...">
-        <input type="number" id="loopCount" placeholder="How many loops per song? (e.g., 3)" min="1">
-        <button id="loadBtn" onclick="loadPlaylist()">Load & Play Playlist</button>
+        <h2>📺 Playlist Automation Hub</h2>
+        <input type="text" id="playlistUrl" placeholder="Paste YouTube Playlist Link...">
+        <button onclick="loadPlaylist()">Load Playlist</button>
 
         <div class="display-panel">
-            <div><strong>Now Playing (MP4 Video):</strong></div>
+            <div><strong>Now Playing:</strong></div>
             <div id="currentSong" class="track-info">None</div>
-            <video id="webVideoPlayer" controls autoplay></video>
-            
             <hr style="border: 1px solid #444; margin: 15px 0;">
-            
             <div><strong>Up Next:</strong></div>
             <div id="nextSong" class="next-info">End of Playlist</div>
         </div>
@@ -39,18 +34,10 @@
     <script>
         let tracks = [];
         let currentIndex = 0;
-        let currentLoopsDone = 0;
-        let maxLoopsAllowed = 1;
 
         async function loadPlaylist() {
             const url = document.getElementById('playlistUrl').value;
-            maxLoopsAllowed = parseInt(document.getElementById('loopCount').value) || 1;
-            const btn = document.getElementById('loadBtn');
-            
-            if(!url) return alert("Please paste a playlist link!");
-
-            btn.innerText = "Loading... Please Wait";
-            btn.style.background = "#ff9500";
+            if(!url) return alert("Paste a link!");
 
             try {
                 const response = await fetch('/api/load-playlist', {
@@ -61,59 +48,25 @@
                 
                 const data = await response.json();
                 
-                if(data.success && data.tracks.length > 0) {
+                if(data.success && data.tracks) {
                     tracks = data.tracks;
                     currentIndex = 0;
-                    currentLoopsDone = 0;
-                    btn.innerText = "Load & Play Playlist";
-                    btn.style.background = "#007aff";
-                    playCurrentTrack();
+                    document.getElementById('currentSong').innerText = tracks[0].title;
+                    document.getElementById('nextSong').innerText = tracks[1] ? tracks[1].title : "None";
+                    
+                    // Sync state
+                    await fetch('/api/update-state', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ currentTrackIndex: 0 })
+                    });
                 } else {
-                    btn.innerText = "Load & Play Playlist";
-                    btn.style.background = "#007aff";
-                    alert("DEBUG ERROR: \n" + (data.error || "Unknown Error"));
+                    alert("Error: " + (data.error || "Failed to load"));
                 }
             } catch (err) {
-                btn.innerText = "Load & Play Playlist";
-                btn.style.background = "#007aff";
-                alert("NETWORK ERROR: " + err.message);
+                alert("Fetch Error: " + err.message);
             }
         }
-
-        function playCurrentTrack() {
-            if (currentIndex >= tracks.length) {
-                document.getElementById('currentSong').innerText = "Playlist Finished!";
-                document.getElementById('nextSong').innerText = "None";
-                return;
-            }
-
-            const currentTrack = tracks[currentIndex];
-            const nextTrack = tracks[currentIndex + 1];
-
-            document.getElementById('currentSong').innerText = `${currentTrack.title} (Loop ${currentLoopsDone + 1}/${maxLoopsAllowed})`;
-            document.getElementById('nextSong').innerText = nextTrack ? nextTrack.title : "End of Playlist";
-
-            fetch('/api/update-state', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ currentTrackIndex: currentIndex })
-            });
-
-            const videoPlayer = document.getElementById('webVideoPlayer');
-            videoPlayer.src = currentTrack.mp4Url;
-            videoPlayer.play();
-        }
-
-        document.getElementById('webVideoPlayer').addEventListener('ended', () => {
-            currentLoopsDone++;
-            if (currentLoopsDone < maxLoopsAllowed) {
-                playCurrentTrack();
-            } else {
-                currentLoopsDone = 0;
-                currentIndex++;
-                playCurrentTrack();
-            }
-        });
     </script>
 </body>
 </html>
