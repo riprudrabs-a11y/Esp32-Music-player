@@ -1,106 +1,374 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Playlist Automation Hub</title>
-    <style>
-        body { font-family: sans-serif; background: #121212; color: #fff; padding: 20px; text-align: center; }
-        .box { background: #1e1e1e; padding: 20px; border-radius: 12px; max-width: 900px; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-        input, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
-        input { background: #2a2a2a; color: white; border: 1px solid #444; }
-        button { background: #007aff; color: white; border: none; font-weight: bold; cursor: pointer; }
-        .display-panel { background: #2a2a2a; padding: 15px; border-radius: 8px; margin: 15px 0; text-align: left; max-height: 400px; overflow: auto; }
-        .track { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
-        .small { font-size: 13px; color: #bbb; }
-        .error { background: #3a2a2a; padding: 12px; border-radius: 6px; color: #ffb3b3; }
-        .debug { background: #262626; padding: 10px; border-radius: 6px; color: #ddd; font-family: monospace; white-space: pre-wrap; }
-    </style>
+  <meta charset="utf-8" />
+  <title>🎵 Music Player Controller</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    * { box-sizing: border-box; margin: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f1113;
+      color: #fff;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+    .container { max-width: 900px; width: 100%; }
+    .card {
+      background: #14181b;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+    }
+    h1 { display: flex; align-items: center; gap: 8px; font-size: 22px; margin-bottom: 20px; }
+    .sub { font-size: 13px; color: #9aa4ad; font-weight: normal; }
+    label { display: block; font-size: 13px; color: #9aa4ad; margin-bottom: 4px; }
+    input[type="text"], input[type="number"] {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.02);
+      color: #fff;
+      font-size: 15px;
+      margin-bottom: 12px;
+    }
+    input[type="range"] {
+      width: 100%;
+      margin: 8px 0 12px 0;
+      background: transparent;
+      accent-color: #0a84ff;
+    }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    button {
+      background: #0a84ff;
+      color: #fff;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+      transition: 0.2s;
+    }
+    button:hover { opacity: 0.85; }
+    button.secondary {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.06);
+      color: #9aa4ad;
+    }
+    .panel {
+      background: rgba(255,255,255,0.02);
+      padding: 16px;
+      border-radius: 10px;
+      margin: 16px 0;
+      min-height: 60px;
+    }
+    .tracks {
+      max-height: 400px;
+      overflow-y: auto;
+      margin: 12px 0;
+      border-radius: 8px;
+    }
+    .track {
+      padding: 10px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .track-title { font-weight: 500; }
+    .track-id { font-size: 11px; color: #9aa4ad; margin-top: 2px; }
+    .copy-btn {
+      background: #222;
+      border: 1px solid rgba(255,255,255,0.03);
+      color: #ddd;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .pager {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      margin: 10px 0;
+      flex-wrap: wrap;
+    }
+    .debug {
+      background: #0b0b0b;
+      padding: 10px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 11px;
+      white-space: pre-wrap;
+      max-height: 200px;
+      overflow: auto;
+      margin-top: 10px;
+    }
+    details summary { cursor: pointer; color: #9aa4ad; font-size: 13px; }
+    .status-msg { margin: 8px 0; padding: 8px 12px; border-radius: 6px; }
+    .ok { background: rgba(46,204,113,0.1); color: #2ecc71; }
+    .err { background: rgba(255,107,107,0.1); color: #ff6b6b; }
+    .loading { background: rgba(10,132,255,0.1); color: #0a84ff; }
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.1);
+      border-top: 2px solid #0a84ff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .flex { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .flex-grow { flex: 1; }
+    .mb-8 { margin-bottom: 8px; }
+  </style>
 </head>
 <body>
-    <div class="box">
-        <h2>📺 Playlist Automation Hub</h2>
-        <input type="text" id="playlistUrl" placeholder="Paste YouTube Playlist Link...">
-        <button onclick="loadPlaylist()">Load Playlist</button>
-        <div class="display-panel" id="output">Status: Ready</div>
+<div class="container">
+  <div class="card">
+    <h1>🎵 Music Controller <span class="sub">for ESP32</span></h1>
+
+    <!-- Playlist input -->
+    <label>📺 YouTube Playlist URL</label>
+    <input type="text" id="playlistUrl" placeholder="https://www.youtube.com/playlist?list=..." />
+
+    <div class="row">
+      <div class="flex-grow">
+        <label>📄 Items per page</label>
+        <input type="number" id="limit" value="50" min="1" max="500" style="width:100px;" />
+      </div>
+      <button id="loadBtn">🔄 Load Playlist</button>
+      <button id="saveSettingsBtn" class="secondary">💾 Save Settings</button>
     </div>
 
-    <script>
-        async function loadPlaylist() {
-            const url = document.getElementById('playlistUrl').value.trim();
-            const output = document.getElementById('output');
-            if(!url) { output.innerHTML = '<div class="error">Please paste a YouTube playlist URL.</div>'; return; }
-            output.innerHTML = 'Loading...';
+    <!-- Settings panel -->
+    <div style="background: rgba(255,255,255,0.02); border-radius: 10px; padding: 16px; margin: 16px 0;">
+      <div class="flex">
+        <div style="flex:2; min-width:150px;">
+          <label>🔊 Volume</label>
+          <input type="range" id="volumeSlider" min="0" max="100" value="50" />
+          <span id="volumeDisplay" style="font-size:14px;">50%</span>
+        </div>
+        <div style="flex:3; min-width:150px;">
+          <label>🔗 Bluetooth Device (name or MAC)</label>
+          <input type="text" id="btDevice" placeholder="e.g. My Earbuds" style="margin-bottom:0;" />
+        </div>
+      </div>
+    </div>
 
-            try {
-                const response = await fetch('/api/load-playlist', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ playlistUrl: url })
-                });
+    <!-- Status -->
+    <div id="status" class="status-msg"></div>
 
-                let bodyText = null;
-                try { bodyText = await response.text(); } catch(e) { bodyText = null; }
+    <!-- Pagination -->
+    <div class="pager">
+      <button id="prevPage" class="secondary">◀ Prev</button>
+      <input type="number" id="page" value="1" min="1" style="width:70px;" />
+      <span style="font-size:13px; color:#9aa4ad;">page</span>
+      <button id="nextPage" class="secondary">Next ▶</button>
+      <span id="pageInfo" style="font-size:13px; color:#9aa4ad; margin-left:auto;"></span>
+    </div>
 
-                let data = null;
-                try { data = bodyText ? JSON.parse(bodyText) : null; } catch(e) { /* ignore */ }
+    <!-- Tracks list -->
+    <div class="tracks" id="tracks"></div>
 
-                if (response.ok && data && data.success) {
-                    const tracks = data.tracks || (data.playlist && data.playlist.tracks) || (data.contents && data.contents.tracks) || [];
-                    if(tracks.length === 0) {
-                        output.innerHTML = '<div class="error">Server returned success but no tracks were found in the playlist.</div>' + suggestionHtml();
-                        output.innerHTML += debugHtml(response.status, data, bodyText);
-                        return;
-                    }
-                    let html = `<div class="small">Loaded playlist. ${tracks.length} tracks (showing up to 100):</div>`;
-                    const max = Math.min(tracks.length, 100);
-                    for(let i=0;i<max;i++){
-                        const t = tracks[i];
-                        html += `<div class="track"><strong>${i+1}. ${escapeHtml(t.title||'Untitled')}</strong><div class="small">mp3: ${escapeHtml(t.mp3Url||'n/a')}<br>id: ${escapeHtml(t.id||'n/a')}</div></div>`;
-                    }
-                    output.innerHTML = html + debugHtml(response.status, data, bodyText);
-                } else {
-                    // Error path — build a helpful debug panel
-                    let errMsg = 'Unknown error';
-                    if (data && data.error) {
-                        if (typeof data.error === 'string') errMsg = data.error;
-                        else if (data.error.message) errMsg = data.error.message;
-                    } else if (!response.ok) {
-                        errMsg = `HTTP ${response.status} ${response.statusText}`;
-                    }
+    <!-- Debug details -->
+    <details>
+      <summary>🛠️ Debug details</summary>
+      <div id="debug" class="debug">No debug info yet.</div>
+    </details>
+  </div>
+</div>
 
-                    output.innerHTML = `<div class="error">Error: ${escapeHtml(errMsg)}</div>` + suggestionHtml();
-                    output.innerHTML += debugHtml(response.status, data, bodyText);
-                }
-            } catch (err) {
-                output.innerHTML = `<div class="error">Network or fetch error: ${escapeHtml(err && err.message ? err.message : String(err))}</div>` + suggestionHtml();
-            }
+<script>
+  // ---------- DOM refs ----------
+  const $ = id => document.getElementById(id);
+  const playlistUrl = $('playlistUrl');
+  const limitInput = $('limit');
+  const pageInput = $('page');
+  const loadBtn = $('loadBtn');
+  const saveSettingsBtn = $('saveSettingsBtn');
+  const prevPage = $('prevPage');
+  const nextPage = $('nextPage');
+  const tracksEl = $('tracks');
+  const statusEl = $('status');
+  const debugEl = $('debug');
+  const pageInfo = $('pageInfo');
+  const volumeSlider = $('volumeSlider');
+  const volumeDisplay = $('volumeDisplay');
+  const btDevice = $('btDevice');
+
+  let state = { lastData: null, lastUrl: '' };
+
+  // ---------- Status helpers ----------
+  function setStatus(msg, type = '') {
+    statusEl.textContent = msg;
+    statusEl.className = 'status-msg ' + type;
+  }
+
+  function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  // ---------- Load & render tracks ----------
+  async function loadPage() {
+    const url = playlistUrl.value.trim();
+    if (!url) { setStatus('⚠️ Please paste a playlist URL.', 'err'); return; }
+    const limit = Math.max(1, Math.min(500, Number(limitInput.value) || 50));
+    const page = Math.max(1, Number(pageInput.value) || 1);
+    const start = (page - 1) * limit + 1;
+
+    setStatus(`⏳ Loading page ${page}...`, 'loading');
+    tracksEl.innerHTML = '';
+
+    try {
+      const encoded = encodeURIComponent(url);
+      const resp = await fetch(`/api/load-playlist?playlistUrl=${encoded}&limit=${limit}`);
+      const txt = await resp.text();
+      let data;
+      try { data = txt ? JSON.parse(txt) : null; } catch (e) { data = null; }
+      debugEl.textContent = `HTTP ${resp.status}\n${JSON.stringify(data, null, 2)}`;
+      state.lastData = data;
+      state.lastUrl = url;
+
+      if (resp.ok && data && data.success) {
+        // Extract tracks from various possible keys
+        let tracks = data.tracks || data.playlist?.tracks || data.contents?.tracks || [];
+        // If the server returned all tracks, we need to slice based on start
+        if (tracks.length > 0 && !data.playlist?.tracks) {
+          // we requested limited items, but if server returned more, slice
+          if (tracks.length > limit) tracks = tracks.slice(0, limit);
         }
 
-        function escapeHtml(s) {
-            if(!s) return '';
-            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        if (tracks.length === 0) {
+          setStatus('ℹ️ No tracks on this page. Try page 1.', 'err');
+          pageInfo.textContent = '';
+          return;
         }
 
-        function debugHtml(status, dataObj, rawText) {
-            let html = '<div style="margin-top:12px">';
-            html += '<details><summary style="cursor:pointer">Show debug details</summary>';
-            html += `<div class="debug">Status: ${status || 'n/a'}\n`;
-            if (dataObj) {
-                html += 'JSON Response:\n' + escapeHtml(JSON.stringify(dataObj, null, 2)) + '\n';
-                if (dataObj.error && dataObj.error.debugId) html += '\nServer debugId: ' + escapeHtml(dataObj.error.debugId) + '\n';
-            } else if (rawText) {
-                html += 'Raw Response:\n' + escapeHtml(rawText) + '\n';
-            } else {
-                html += 'No response body was returned.\n';
-            }
-            html += '\nLogs: Check your server logs (Render dashboard or server console) and search for the debugId above if present.';
-            html += '</div></details></div>';
-            return html;
-        }
+        setStatus(`✅ Loaded ${tracks.length} tracks (page ${page})`, 'ok');
+        pageInfo.textContent = `[${start}..${start + tracks.length - 1}]`;
 
-        function suggestionHtml(){
-            return `<div class="small" style="margin-top:8px">Suggestions:\n<ul><li>Make sure the playlist is public and not age-restricted or private.</li><li>Try using a shorter limit (e.g., limit=5) and test with a known-public playlist.</li><li>If the server returns a debugId, check the server logs (Render dashboard > Logs) and search that id.</li></ul></div>`;
-        }
-    </script>
+        tracksEl.innerHTML = tracks.map((t, i) => {
+          const idx = start + i;
+          const title = escapeHtml(t.title || 'Untitled');
+          const mp3 = escapeHtml(t.mp3Url || t.url || 'n/a');
+          return `<div class="track">
+            <div>
+              <div class="track-title">#${idx} ${title}</div>
+              <div class="track-id">${mp3}</div>
+            </div>
+            <button class="copy-btn" onclick="copyToClipboard('${t.mp3Url || ''}')">📋 Copy</button>
+          </div>`;
+        }).join('');
+
+        // Save the playlist URL in localStorage so it persists
+        localStorage.setItem('lastPlaylistUrl', url);
+      } else {
+        const errMsg = data?.error?.message || `HTTP ${resp.status}`;
+        setStatus(`❌ Error: ${errMsg}`, 'err');
+        pageInfo.textContent = '';
+      }
+    } catch (err) {
+      setStatus(`⚠️ Network error: ${err.message}`, 'err');
+      debugEl.textContent = String(err);
+    }
+  }
+
+  // ---------- Copy to clipboard ----------
+  window.copyToClipboard = function(text) {
+    navigator.clipboard.writeText(text).then(() => {
+      alert('✅ Copied!');
+    }).catch(() => {
+      prompt('Copy this URL:', text);
+    });
+  };
+
+  // ---------- Save settings to server ----------
+  async function saveSettings() {
+    const playlist = playlistUrl.value.trim();
+    const volume = Number(volumeSlider.value);
+    const device = btDevice.value.trim();
+
+    try {
+      const resp = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playlistUrl: playlist, volume, bluetoothDevice: device })
+      });
+      const data = await resp.json();
+      if (data.success) {
+        setStatus('✅ Settings saved to server!', 'ok');
+        // Also store locally
+        localStorage.setItem('lastPlaylistUrl', playlist);
+        localStorage.setItem('lastVolume', volume);
+        localStorage.setItem('lastBtDevice', device);
+      } else {
+        setStatus('⚠️ Failed to save settings.', 'err');
+      }
+    } catch (err) {
+      setStatus(`⚠️ Error saving: ${err.message}`, 'err');
+    }
+  }
+
+  // ---------- Load saved settings from localStorage and server ----------
+  async function loadSettings() {
+    // From localStorage first
+    const savedUrl = localStorage.getItem('lastPlaylistUrl') || '';
+    const savedVol = localStorage.getItem('lastVolume');
+    const savedBt = localStorage.getItem('lastBtDevice') || '';
+    if (savedUrl) playlistUrl.value = savedUrl;
+    if (savedVol !== null) {
+      volumeSlider.value = savedVol;
+      volumeDisplay.textContent = savedVol + '%';
+    }
+    if (savedBt) btDevice.value = savedBt;
+
+    // Then fetch from server (to get the latest values the ESP32 might have used)
+    try {
+      const resp = await fetch('/api/settings');
+      const data = await resp.json();
+      if (data.success) {
+        const s = data.settings;
+        if (s.playlistUrl) playlistUrl.value = s.playlistUrl;
+        if (s.volume !== undefined) { volumeSlider.value = s.volume; volumeDisplay.textContent = s.volume + '%'; }
+        if (s.bluetoothDevice) btDevice.value = s.bluetoothDevice;
+        // Update localStorage to match server
+        localStorage.setItem('lastPlaylistUrl', s.playlistUrl || '');
+        localStorage.setItem('lastVolume', s.volume || 50);
+        localStorage.setItem('lastBtDevice', s.bluetoothDevice || '');
+      }
+    } catch (e) {
+      console.log('Could not fetch settings from server, using local.');
+    }
+  }
+
+  // ---------- Volume slider display ----------
+  volumeSlider.addEventListener('input', () => {
+    volumeDisplay.textContent = volumeSlider.value + '%';
+  });
+
+  // ---------- Event listeners ----------
+  loadBtn.addEventListener('click', () => { pageInput.value = 1; loadPage(); });
+  prevPage.addEventListener('click', () => {
+    pageInput.value = Math.max(1, Number(pageInput.value) - 1);
+    loadPage();
+  });
+  nextPage.addEventListener('click', () => {
+    pageInput.value = Number(pageInput.value) + 1;
+    loadPage();
+  });
+  saveSettingsBtn.addEventListener('click', saveSettings);
+
+  // ---------- Initialize ----------
+  loadSettings();
+  // If there's a saved playlist, load it automatically
+  if (playlistUrl.value.trim()) {
+    loadPage();
+  }
+</script>
 </body>
 </html>
