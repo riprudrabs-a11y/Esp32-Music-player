@@ -36,7 +36,6 @@ async function fetchPlaylist(playlistUrl, limit) {
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  // ytpl expects a playlist id/url; it will throw on invalid input
   const playlist = await ytpl(playlistUrl, { limit });
   const tracks = (playlist.items || [])
     .filter(item => item && item.id)
