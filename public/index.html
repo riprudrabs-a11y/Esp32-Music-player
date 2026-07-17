@@ -2,66 +2,30 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Playlist Automation Hub</title>
-    <style>
-        body { font-family: sans-serif; background: #121212; color: #fff; padding: 20px; text-align: center; }
-        .box { background: #1e1e1e; padding: 20px; border-radius: 12px; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
-        input, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
-        input { background: #2a2a2a; color: white; border: 1px solid #444; }
-        button { background: #007aff; color: white; border: none; font-weight: bold; cursor: pointer; }
-        .display-panel { background: #2a2a2a; padding: 15px; border-radius: 8px; margin: 15px 0; text-align: left; }
-        .track-info { font-size: 18px; margin: 5px 0; color: #34c759; }
-        .next-info { font-size: 14px; color: #aaa; }
-        video { width: 100%; border-radius: 8px; background: #000; margin-top: 10px; }
-    </style>
 </head>
 <body>
-    <div class="box">
-        <h2>📺 Playlist Automation Hub</h2>
+    <div style="text-align:center; padding: 50px;">
+        <h2>Playlist Automation Hub</h2>
         <input type="text" id="playlistUrl" placeholder="Paste YouTube Playlist Link...">
         <button onclick="loadPlaylist()">Load Playlist</button>
-
-        <div class="display-panel">
-            <div><strong>Now Playing:</strong></div>
-            <div id="currentSong" class="track-info">None</div>
-            <hr style="border: 1px solid #444; margin: 15px 0;">
-            <div><strong>Up Next:</strong></div>
-            <div id="nextSong" class="next-info">End of Playlist</div>
-        </div>
+        <div id="status">Ready</div>
     </div>
 
     <script>
-        let tracks = [];
-        let currentIndex = 0;
-
         async function loadPlaylist() {
             const url = document.getElementById('playlistUrl').value;
-            if(!url) return alert("Paste a link!");
-
             try {
                 const response = await fetch('/api/load-playlist', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ playlistUrl: url })
                 });
-                
                 const data = await response.json();
-                
-                if(data.success && data.tracks) {
-                    tracks = data.tracks;
-                    currentIndex = 0;
-                    document.getElementById('currentSong').innerText = tracks[0].title;
-                    document.getElementById('nextSong').innerText = tracks[1] ? tracks[1].title : "None";
-                    
-                    // Sync state
-                    await fetch('/api/update-state', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ currentTrackIndex: 0 })
-                    });
+                if(data.success) {
+                    alert("Loaded " + data.tracks.length + " songs!");
                 } else {
-                    alert("Error: " + (data.error || "Failed to load"));
+                    alert("Error: " + data.error);
                 }
             } catch (err) {
                 alert("Fetch Error: " + err.message);
