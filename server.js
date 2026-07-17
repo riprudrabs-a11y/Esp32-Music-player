@@ -3,22 +3,25 @@ const ytpl = require('ytpl');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const NodeCache = require('node-cache');
-const { execFile } = require('child_process');
+const { spawn, execFile } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-const cache = new NodeCache({ stdTTL: 300, checkperiod: 60 });
+// Simple in-memory cache (TTL seconds)
+const cache = new NodeCache({ stdTTL: 300, checkperiod: 60 }); // cache playlists 5 minutes
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(express.static('public'));
 
+// Enable CORS for development. Restrict origin in production by setting CORS_ORIGIN
 app.use(cors({ origin: process.env.CORS_ORIGIN || true }));
 
+// Basic rate limiter
 const limiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 30,
+  windowMs: 60 * 1000, // 1 minute
+  max: 30, // limit each IP to 30 requests per windowMs
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -29,15 +32,17 @@ function isNonEmptyString(v) {
 }
 
 function generateDebugId() {
-  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8);
 }
 
-function getPlaylistWithYtDlp(playlistUrl, start = 1, limit = 50) {
+function getPlaylistWithYtDlp(playlistUrl, limit = 50) {
+  // Call the yt-dlp CLI (must be installed on the host) and return parsed JSON
   return new Promise((resolve, reject) => {
-    const end = start + limit - 1;
-    const args = ['-J', '--flat-playlist', '--playlist-start', String(start), '--playlist-end', String(end), playlistUrl];
+    const args = ['-J', '--flat-playlist', '--playlist-end', String(limit), playlistUrl];
+    // Increase maxBuffer in case playlist JSON is large
     execFile('yt-dlp', args, { maxBuffer: 20 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) {
+        // include stderr in the error for debugging
         err.stderr = stderr ? String(stderr).slice(0, 2000) : undefined;
         return reject(err);
       }
@@ -57,23 +62,19 @@ function getPlaylistWithYtDlp(playlistUrl, start = 1, limit = 50) {
   });
 }
 
-async function fetchPlaylist(playlistUrl, start, limit) {
-  const cacheKey = `playlist:${playlistUrl}:start:${start}:limit:${limit}`;
+async function fetchPlaylist(playlistUrl, limit) {
+  // Use cache to avoid repeated calls
+  const cacheKey = `playlist:${playlistUrl}:limit:${limit}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
   let playlist;
   try {
-    playlist = await ytpl(playlistUrl, { limit: Math.min(limit, 50), yt_api: false });
-    // Slice for start position
-    if (start > 1) {
-      playlist.items = playlist.items.slice(start - 1, start - 1 + limit);
-    } else {
-      playlist.items = playlist.items.slice(0, limit);
-    }
+    playlist = await ytpl(playlistUrl, { limit });
   } catch (err) {
     console.warn('ytpl failed, trying yt-dlp fallback:', err && err.message ? err.message : err);
-    playlist = await getPlaylistWithYtDlp(playlistUrl, start, limit);
+    // fallback to yt-dlp
+    playlist = await getPlaylistWithYtDlp(playlistUrl, limit);
   }
 
   const tracks = (playlist.items || [])
@@ -91,6 +92,7 @@ async function fetchPlaylist(playlistUrl, start, limit) {
 }
 
 function successResponse(data) {
+  // Provide multiple keys so different clients (old/new) work: playlist, contents, tracks
   return {
     success: true,
     playlist: data,
@@ -100,6 +102,7 @@ function successResponse(data) {
 }
 
 function errorResponse(err, debugId) {
+  // Avoid leaking full stack to clients; include a debugId to find logs
   return {
     success: false,
     error: {
@@ -111,22 +114,21 @@ function errorResponse(err, debugId) {
   };
 }
 
+// POST-based API (keeps compatibility with existing clients)
 app.post('/api/load-playlist', async (req, res) => {
   const playlistUrl = req.body && req.body.playlistUrl;
-  let start = Number(req.body && req.body.start) || 1;
   let limit = Number(req.body && req.body.limit) || 50;
 
-  if (!Number.isFinite(start) || start < 1) start = 1;
   if (!Number.isFinite(limit) || limit < 1) limit = 1;
-  if (limit > 500) limit = 500;
+  if (limit > 500) limit = 500; // allow larger requests but cap them
 
   if (!isNonEmptyString(playlistUrl)) {
     return res.status(400).json({ success: false, error: { message: 'Missing or invalid playlistUrl in request body.' } });
   }
 
   try {
-    console.log(`Attempting to load playlist: ${playlistUrl} (start=${start}, limit=${limit})`);
-    const data = await fetchPlaylist(playlistUrl, start, limit);
+    console.log(`Attempting to load playlist: ${playlistUrl} (limit=${limit})`);
+    const data = await fetchPlaylist(playlistUrl, limit);
     res.json(successResponse(data));
   } catch (err) {
     const debugId = generateDebugId();
@@ -135,12 +137,12 @@ app.post('/api/load-playlist', async (req, res) => {
   }
 });
 
+// GET-based API for simple clients (e.g., IoT boards that prefer GET)
+// Example: /api/load-playlist?playlistUrl=...&limit=20
 app.get('/api/load-playlist', async (req, res) => {
   const playlistUrl = req.query && req.query.playlistUrl;
-  let start = Number(req.query && req.query.start) || 1;
   let limit = Number(req.query && req.query.limit) || 50;
 
-  if (!Number.isFinite(start) || start < 1) start = 1;
   if (!Number.isFinite(limit) || limit < 1) limit = 1;
   if (limit > 500) limit = 500;
 
@@ -149,8 +151,8 @@ app.get('/api/load-playlist', async (req, res) => {
   }
 
   try {
-    console.log(`Attempting to load playlist (GET): ${playlistUrl} (start=${start}, limit=${limit})`);
-    const data = await fetchPlaylist(playlistUrl, start, limit);
+    console.log(`Attempting to load playlist (GET): ${playlistUrl} (limit=${limit})`);
+    const data = await fetchPlaylist(playlistUrl, limit);
     res.json(successResponse(data));
   } catch (err) {
     const debugId = generateDebugId();
@@ -159,6 +161,8 @@ app.get('/api/load-playlist', async (req, res) => {
   }
 });
 
+// Stream endpoint: proxy audio via yt-dlp for a given video id
+// Example: /api/stream?id=VIDEO_ID
 app.get('/api/stream', (req, res) => {
   const id = req.query && req.query.id;
   if (!id) return res.status(400).send('Missing id');
@@ -166,7 +170,7 @@ app.get('/api/stream', (req, res) => {
   const videoUrl = `https://www.youtube.com/watch?v=${id}`;
   console.log(`Streaming video ${id}`);
 
-  const { spawn } = require('child_process');
+  // Spawn yt-dlp binary (must be available in the environment). This pipes raw audio to the response.
   const proc = spawn('yt-dlp', ['-o', '-', '-f', 'bestaudio', '--no-playlist', videoUrl], { stdio: ['ignore', 'pipe', 'pipe'] });
 
   proc.on('error', (err) => {
@@ -174,13 +178,14 @@ app.get('/api/stream', (req, res) => {
     if (!res.headersSent) res.status(500).send('Server streaming error: yt-dlp not available');
   });
 
+  // Header: best-effort audio content type
   res.setHeader('Content-Type', 'audio/mpeg');
   res.setHeader('Transfer-Encoding', 'chunked');
 
   proc.stdout.pipe(res);
 
   proc.stderr.on('data', (d) => {
-    console.error('yt-dlp stderr:', d.toString().slice(0, 200));
+    console.error('yt-dlp stderr:', d.toString().slice(0,200));
   });
 
   req.on('close', () => {
