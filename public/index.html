@@ -3,68 +3,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Playlist Creator</title>
+    <title>Playlist Automation Hub</title>
     <style>
-        body { font-family: sans-serif; background: #121212; color: #fff; padding: 20px; }
-        .box { background: #1e1e1e; padding: 20px; border-radius: 8px; max-width: 500px; margin: 0 auto; }
-        input, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; box-sizing: border-box; }
+        body { font-family: sans-serif; background: #121212; color: #fff; padding: 20px; text-align: center; }
+        .box { background: #1e1e1e; padding: 20px; border-radius: 12px; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        input, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
         input { background: #2a2a2a; color: white; border: 1px solid #444; }
         button { background: #007aff; color: white; border: none; font-weight: bold; cursor: pointer; }
-        ul { padding: 0; list-style: none; }
-        li { background: #2a2a2a; padding: 10px; margin: 5px 0; border-radius: 4px; font-size: 14px; }
+        .display-panel { background: #2a2a2a; padding: 15px; border-radius: 8px; margin: 15px 0; text-align: left; }
+        .track-info { font-size: 18px; margin: 5px 0; color: #34c759; }
+        .next-info { font-size: 14px; color: #aaa; }
+        video { width: 100%; border-radius: 8px; background: #000; margin-top: 10px; }
     </style>
 </head>
 <body>
     <div class="box">
-        <h2>🎵 YouTube Playlist Automation</h2>
-        <p>Add your tracks below in the exact order you want them to play.</p>
+        <h2>📺 YouTube Playlist Automation Engine</h2>
         
-        <input type="text" id="ytUrl" placeholder="Paste YouTube Link here...">
-        <input type="number" id="loopCount" placeholder="How many loops? (e.g., 3)" min="1">
-        <button onclick="addTrack()">Add Track to Order</button>
+        <input type="text" id="playlistUrl" placeholder="Paste YouTube Playlist Link here...">
+        <input type="number" id="loopCount" placeholder="How many loops per song? (e.g., 3)" min="1">
+        <button onclick="loadPlaylist()">Load & Play Playlist</button>
 
-        <h3>Current Order:</h3>
-        <ul id="queueList"></ul>
-        
-        <button onclick="viewRawData()" style="background: #34c759;">Show Microcontroller View</button>
+        <div class="display-panel">
+            <div><strong>Now Playing (MP4 Video):</strong></div>
+            <div id="currentSong" class="track-info">None</div>
+            <video id="webVideoPlayer" controls autoplay></video>
+            
+            <hr style="border: 1px solid #444; margin: 15px 0;">
+            
+            <div><strong>Up Next:</strong></div>
+            <div id="nextSong" class="next-info">End of Playlist</div>
+        </div>
     </div>
 
     <script>
-        let trackQueue = [];
+        let tracks = [];
+        let currentIndex = 0;
+        let currentLoopsDone = 0;
+        let maxLoopsAllowed = 1;
 
-        function addTrack() {
-            const url = document.getElementById('ytUrl').value;
-            const loops = parseInt(document.getElementById('loopCount').value) || 1;
+        async function loadPlaylist() {
+            const url = document.getElementById('playlistUrl').value;
+            maxLoopsAllowed = parseInt(document.getElementById('loopCount').value) || 1;
             
-            if(!url) return alert("Please paste a link first!");
-            
-            // Push track to the array in order
-            trackQueue.push({ url: url, loops: loops });
-            
-            // Clear inputs
-            document.getElementById('ytUrl').value = '';
-            document.getElementById('loopCount').value = '';
-            
-            updateDisplay();
-        }
+            if(!url) return alert("Please paste a playlist link!");
 
-        function updateDisplay() {
-            const list = document.getElementById('queueList');
-            list.innerHTML = '';
-            trackQueue.forEach((track, index) => {
-                list.innerHTML += `<li><strong>${index + 1}.</strong> ${track.url} — (Loop ${track.loops}x)</li>`;
-            });
-        }
-
-        // This opens a view that your microcontroller or iPhone app can easily parse later
-        async function viewRawData() {
-            const response = await fetch('/api/save-playlist', {
+            const response = await fetch('/api/load-playlist', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tracks: trackQueue })
+                body: JSON.stringify({ playlistUrl: url })
             });
-            window.location.href = '/api/current-playlist';
+            
+            const data = await response.json();
+            if(data.success && data.tracks.length > 0) {
+                tracks = data.tracks;
+                currentIndex = 0;
+                currentLoopsDone = 0;
+                playCurrentTrack();
+            } else {
+                alert("Could not load playlist tracks.");
+            }
         }
+
+        function playCurrentTrack() {
+            if (currentIndex >= tracks.length) {
+                document.getElementById('currentSong').innerText = "Playlist Finished!";
+                document.getElementById('nextSong').innerText = "None";
+                return;
+            }
+
+            const currentTrack = tracks[currentIndex];
+            const nextTrack = tracks[currentIndex + 1];
+
+            document.getElementById('currentSong').innerText = `${currentTrack.title} (Loop ${currentLoopsDone + 1}/${maxLoopsAllowed})`;
+            document.getElementById('nextSong').innerText = nextTrack ? nextTrack.title : "End of Playlist";
+
+            fetch('/api/update-state', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ currentTrackIndex: currentIndex })
+            });
+
+            const videoPlayer = document.getElementById('webVideoPlayer');
+            videoPlayer.src = currentTrack.mp4Url;
+            videoPlayer.play();
+        }
+
+        document.getElementById('webVideoPlayer').addEventListener('ended', () => {
+            currentLoopsDone++;
+            if (currentLoopsDone < maxLoopsAllowed) {
+                playCurrentTrack();
+            } else {
+                currentLoopsDone = 0;
+                currentIndex++;
+                playCurrentTrack();
+            }
+        });
     </script>
 </body>
 </html>
