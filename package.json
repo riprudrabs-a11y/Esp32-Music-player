@@ -1,0 +1,12 @@
+{
+  "name": "playlist-automation-dashboard",
+  "version": "1.0.0",
+  "description": "Web dashboard for managing offline playlists and automation rules",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
