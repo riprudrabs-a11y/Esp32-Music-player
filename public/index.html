@@ -3,81 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Automation Playlist Dashboard</title>
+    <title>Simple Playlist Creator</title>
     <style>
-        body { font-family: -apple-system, sans-serif; background: #121212; color: #fff; padding: 20px; }
-        .container { max-width: 600px; margin: 0 auto; }
-        .card { background: #1c1c1e; padding: 20px; border-radius: 12px; margin-bottom: 15px; }
-        button { background: #007aff; color: white; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        input, select { background: #2c2c2e; color: white; border: 1px solid #3a3a3c; padding: 10px; border-radius: 8px; width: 100%; box-sizing: border-box; margin-bottom: 10px; }
-        ul { list-style: none; padding: 0; }
-        li { background: #2c2c2e; padding: 10px; margin-bottom: 5px; border-radius: 6px; display: flex; justify-content: space-between; }
+        body { font-family: sans-serif; background: #121212; color: #fff; padding: 20px; }
+        .box { background: #1e1e1e; padding: 20px; border-radius: 8px; max-width: 500px; margin: 0 auto; }
+        input, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; box-sizing: border-box; }
+        input { background: #2a2a2a; color: white; border: 1px solid #444; }
+        button { background: #007aff; color: white; border: none; font-weight: bold; cursor: pointer; }
+        ul { padding: 0; list-style: none; }
+        li { background: #2a2a2a; padding: 10px; margin: 5px 0; border-radius: 4px; font-size: 14px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>🎵 Playlist Automation Hub</h2>
+    <div class="box">
+        <h2>🎵 YouTube Playlist Automation</h2>
+        <p>Add your tracks below in the exact order you want them to play.</p>
         
-        <!-- Create Playlist -->
-        <div class="card">
-            <h3>Create a New Playlist Container</h3>
-            <input type="text" id="playlistName" placeholder="e.g., Chill Automation Track">
-            <button onclick="createPlaylist()">Create Playlist</button>
-        </div>
+        <input type="text" id="ytUrl" placeholder="Paste YouTube Link here...">
+        <input type="number" id="loopCount" placeholder="How many loops? (e.g., 3)" min="1">
+        <button onclick="addTrack()">Add Track to Order</button>
 
-        <!-- Automation Queues -->
-        <div class="card">
-            <h3>Active Playlists</h3>
-            <div id="playlistContainer"></div>
-        </div>
+        <h3>Current Order:</h3>
+        <ul id="queueList"></ul>
         
-        <!-- Quick Audio Player Preview -->
-        <div class="card">
-            <h3>Live Automation Player Test</h3>
-            <audio id="mainAudioPlayer" controls style="width: 100%; margin-bottom: 10px;"></audio>
-            <div id="status">Status: Idle</div>
-        </div>
+        <button onclick="viewRawData()" style="background: #34c759;">Show Microcontroller View</button>
     </div>
 
     <script>
-        let library = {};
+        let trackQueue = [];
 
-        function createPlaylist() {
-            const name = document.getElementById('playlistName').value;
-            if(!name) return;
+        function addTrack() {
+            const url = document.getElementById('ytUrl').value;
+            const loops = parseInt(document.getElementById('loopCount').value) || 1;
             
-            library[name] = [];
-            document.getElementById('playlistName').value = '';
-            renderPlaylists();
+            if(!url) return alert("Please paste a link first!");
+            
+            // Push track to the array in order
+            trackQueue.push({ url: url, loops: loops });
+            
+            // Clear inputs
+            document.getElementById('ytUrl').value = '';
+            document.getElementById('loopCount').value = '';
+            
+            updateDisplay();
         }
 
-        function renderPlaylists() {
-            const container = document.getElementById('playlistContainer');
-            container.innerHTML = '';
-            
-            for (let name in library) {
-                container.innerHTML += `
-                    <div style="border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 10px;">
-                        <h4>📂 ${name}</h4>
-                        <input type="text" placeholder="MP3 Link / Stream URL" id="url-${name}">
-                        <input type="number" placeholder="Number of loops (e.g. 3)" id="loops-${name}" min="1">
-                        <button onclick="addTrack('${name}')">Add Rule</button>
-                        <ul id="list-${name}">
-                            ${library[name].map((t, idx) => `<li>${idx+1}. Play ${t.loops}x before skip</li>`).join('')}
-                        </ul>
-                    </div>
-                `;
-            }
+        function updateDisplay() {
+            const list = document.getElementById('queueList');
+            list.innerHTML = '';
+            trackQueue.forEach((track, index) => {
+                list.innerHTML += `<li><strong>${index + 1}.</strong> ${track.url} — (Loop ${track.loops}x)</li>`;
+            });
         }
 
-        function addTrack(playlistName) {
-            const url = document.getElementById(`url-${playlistName}`).value;
-            const loops = parseInt(document.getElementById(`loops-${playlistName}`).value) || 1;
-            
-            if(!url) return;
-            library[playlistName].push({ url: url, loops: loops });
-            renderPlaylists();
+        // This opens a view that your microcontroller or iPhone app can easily parse later
+        async function viewRawData() {
+            const response = await fetch('/api/save-playlist', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tracks: trackQueue })
+            });
+            window.location.href = '/api/current-playlist';
         }
     </script>
 </body>
