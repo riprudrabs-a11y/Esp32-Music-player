@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const https = require('https');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -14,84 +15,91 @@ function getPlaylistId(url) {
     return match ? match[1] : null;
 }
 
-// 1. EXTENSIVE DEBUG PLAYLIST LOADER
-app.post('/api/load-playlist', async (req, res) => {
-    console.log("\n=== NEW PLAYLIST REQUEST INITIATED ===");
-    const { playlistUrl } = req.body;
-    console.log("Step 1: Received URL -", playlistUrl);
-    
-    const playlistId = getPlaylistId(playlistUrl);
-    console.log("Step 2: Extracted ID -", playlistId);
-    
-    if (!playlistId) {
-        console.log("FAIL: Invalid URL formatting.");
-        return res.status(400).json({ success: false, error: "Cannot find 'list=' in your URL." });
-    }
-
-    try {
-        // Using a highly stable Piped instance
-        const apiUrl = `https://pipedapi.tokhmi.xyz/playlists/${playlistId}`;
-        console.log("Step 3: Contacting API -", apiUrl);
-        
-        const response = await fetch(apiUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
-        });
-        
-        console.log(`Step 4: API Responded with Status Code: ${response.status}`);
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.log("FAIL: API Rejected Request. Reason:", errorText);
-            throw new Error(`API returned HTTP ${response.status}: ${errorText}`);
-        }
-
-        const parsedData = await response.json();
-        console.log("Step 5: Data parsed successfully.");
-        console.log(" -> Playlist Name:", parsedData.name || "Unknown");
-        console.log(" -> Videos Found:", parsedData.relatedStreams ? parsedData.relatedStreams.length : 0);
-        
-        if (parsedData && parsedData.relatedStreams && parsedData.relatedStreams.length > 0) {
-            masterPlaylistTracks = parsedData.relatedStreams.map(video => {
-                const videoId = video.url.split('v=')[1];
-                return {
-                    title: video.title,
-                    mp4Url: `https://inv.tux.pizza/latest_version?id=${videoId}&itag=22`,
-                    mp3Url: `https://inv.tux.pizza/latest_version?id=${videoId}&itag=140`
-                };
+// Custom highly-stable network request function
+function fetchJson(url) {
+    return new Promise((resolve, reject) => {
+        https.get(url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                    try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+                } else {
+                    reject(new Error(`HTTP Status ${res.statusCode}`));
+                }
             });
+        }).on('error', reject);
+    });
+}
 
-            activeTrackIndex = 0;
-            console.log(`Step 6: SUCCESS! Loaded ${masterPlaylistTracks.length} tracks into memory.`);
-            return res.json({ success: true, tracks: masterPlaylistTracks });
+// The Auto-Fallback Playlist Loader
+app.post('/api/load-playlist', async (req, res) => {
+    const playlistId = getPlaylistId(req.body.playlistUrl);
+    if (!playlistId) return res.status(400).json({ success: false, error: "Invalid Playlist URL" });
+
+    // Array of stable API mirrors. It tests them sequentially until one works.
+    const apiMirrors = [
+        `https://pipedapi.kavin.rocks/playlists/${playlistId}`,
+        `https://pipedapi.adminforge.de/playlists/${playlistId}`,
+        `https://pipedapi.smnz.de/playlists/${playlistId}`,
+        `https://pipedapi.moomoo.me/playlists/${playlistId}`
+    ];
+
+    let parsedData = null;
+    let lastError = "";
+
+    for (let apiUrl of apiMirrors) {
+        try {
+            console.log("Attempting API pipeline:", apiUrl);
+            parsedData = await fetchJson(apiUrl);
+            
+            if (parsedData && parsedData.relatedStreams && parsedData.relatedStreams.length > 0) {
+                console.log("SUCCESS! Connected via:", apiUrl);
+                break; // We got the data, stop looking
+            }
+        } catch (err) {
+            console.log("Pipeline failed, trying next. Error:", err.message);
+            lastError = err.message;
         }
-        
-        console.log("FAIL: API connection worked, but video array was empty.");
-        res.status(500).json({ success: false, error: "Playlist data returned empty. API might be blocking large playlists." });
-        
-    } catch (error) {
-        console.error("=== CRITICAL SERVER ERROR ===");
-        console.error(error.message);
-        res.status(500).json({ success: false, error: `Debug Log: ${error.message}` });
     }
+
+    if (!parsedData || !parsedData.relatedStreams) {
+        return res.status(500).json({ 
+            success: false, 
+            error: `All proxy APIs rejected the connection. Last error: ${lastError}` 
+        });
+    }
+
+    // Map the successfully retrieved tracks
+    masterPlaylistTracks = parsedData.relatedStreams.map(video => {
+        const videoId = video.url.split('v=')[1];
+        return {
+            title: video.title,
+            mp4Url: `https://inv.tux.pizza/latest_version?id=${videoId}&itag=22`,
+            mp3Url: `https://inv.tux.pizza/latest_version?id=${videoId}&itag=140`
+        };
+    });
+
+    activeTrackIndex = 0;
+    res.json({ success: true, tracks: masterPlaylistTracks });
 });
 
-// 2. State Tracker
+// State Syncing
 app.post('/api/update-state', (req, res) => {
     activeTrackIndex = req.body.currentTrackIndex;
     res.json({ success: true });
 });
 
-// 3. MICROCONTROLLER ENDPOINT
+// MICROCONTROLLER ENDPOINT
 app.get('/api/micro-view', (req, res) => {
     if (masterPlaylistTracks.length === 0 || activeTrackIndex >= masterPlaylistTracks.length) {
         return res.json({ status: "idle", currentTrackTitle: "None", mp3Url: "" });
     }
     
-    const current = masterPlaylistTracks[activeTrackIndex];
     res.json({
         status: "playing",
-        currentTrackTitle: current.title,
-        mp3Url: current.mp3Url
+        currentTrackTitle: masterPlaylistTracks[activeTrackIndex].title,
+        mp3Url: masterPlaylistTracks[activeTrackIndex].mp3Url
     });
 });
 
@@ -100,5 +108,5 @@ app.get('*', (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log(`Server live on port ${PORT} - DEBUG MODE ACTIVE`);
+    console.log(`Server live on port ${PORT}`);
 });
