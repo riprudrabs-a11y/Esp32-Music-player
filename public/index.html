@@ -5,13 +5,15 @@
     <title>Playlist Automation Hub</title>
     <style>
         body { font-family: sans-serif; background: #121212; color: #fff; padding: 20px; text-align: center; }
-        .box { background: #1e1e1e; padding: 20px; border-radius: 12px; max-width: 800px; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .box { background: #1e1e1e; padding: 20px; border-radius: 12px; max-width: 900px; margin: 0 auto; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
         input, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
         input { background: #2a2a2a; color: white; border: 1px solid #444; }
         button { background: #007aff; color: white; border: none; font-weight: bold; cursor: pointer; }
         .display-panel { background: #2a2a2a; padding: 15px; border-radius: 8px; margin: 15px 0; text-align: left; max-height: 400px; overflow: auto; }
         .track { padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
         .small { font-size: 13px; color: #bbb; }
+        .error { background: #3a2a2a; padding: 12px; border-radius: 6px; color: #ffb3b3; }
+        .debug { background: #262626; padding: 10px; border-radius: 6px; color: #ddd; font-family: monospace; white-space: pre-wrap; }
     </style>
 </head>
 <body>
@@ -26,8 +28,8 @@
         async function loadPlaylist() {
             const url = document.getElementById('playlistUrl').value.trim();
             const output = document.getElementById('output');
-            if(!url) { output.innerText = 'Please paste a YouTube playlist URL.'; return; }
-            output.innerText = "Loading...";
+            if(!url) { output.innerHTML = '<div class="error">Please paste a YouTube playlist URL.</div>'; return; }
+            output.innerHTML = 'Loading...';
 
             try {
                 const response = await fetch('/api/load-playlist', {
@@ -35,34 +37,69 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ playlistUrl: url })
                 });
-                const data = await response.json();
 
-                if(!data) { output.innerText = 'Empty response from server.'; return; }
+                let bodyText = null;
+                try { bodyText = await response.text(); } catch(e) { bodyText = null; }
 
-                // Accept multiple shapes for compatibility
-                const tracks = data.tracks || (data.playlist && data.playlist.tracks) || (data.contents && data.contents.tracks) || [];
+                let data = null;
+                try { data = bodyText ? JSON.parse(bodyText) : null; } catch(e) { /* ignore */ }
 
-                if(data.success && tracks.length > 0) {
+                if (response.ok && data && data.success) {
+                    const tracks = data.tracks || (data.playlist && data.playlist.tracks) || (data.contents && data.contents.tracks) || [];
+                    if(tracks.length === 0) {
+                        output.innerHTML = '<div class="error">Server returned success but no tracks were found in the playlist.</div>' + suggestionHtml();
+                        output.innerHTML += debugHtml(response.status, data, bodyText);
+                        return;
+                    }
                     let html = `<div class="small">Loaded playlist. ${tracks.length} tracks (showing up to 100):</div>`;
                     const max = Math.min(tracks.length, 100);
                     for(let i=0;i<max;i++){
                         const t = tracks[i];
                         html += `<div class="track"><strong>${i+1}. ${escapeHtml(t.title||'Untitled')}</strong><div class="small">mp3: ${escapeHtml(t.mp3Url||'n/a')}<br>id: ${escapeHtml(t.id||'n/a')}</div></div>`;
                     }
-                    output.innerHTML = html;
-                } else if(data.success && tracks.length === 0) {
-                    output.innerText = 'No tracks found in playlist.';
+                    output.innerHTML = html + debugHtml(response.status, data, bodyText);
                 } else {
-                    output.innerText = 'Error: ' + (data.error || 'Unknown error');
+                    // Error path — build a helpful debug panel
+                    let errMsg = 'Unknown error';
+                    if (data && data.error) {
+                        if (typeof data.error === 'string') errMsg = data.error;
+                        else if (data.error.message) errMsg = data.error.message;
+                    } else if (!response.ok) {
+                        errMsg = `HTTP ${response.status} ${response.statusText}`;
+                    }
+
+                    output.innerHTML = `<div class="error">Error: ${escapeHtml(errMsg)}</div>` + suggestionHtml();
+                    output.innerHTML += debugHtml(response.status, data, bodyText);
                 }
             } catch (err) {
-                output.innerText = "Fetch Error: " + (err && err.message ? err.message : String(err));
+                output.innerHTML = `<div class="error">Network or fetch error: ${escapeHtml(err && err.message ? err.message : String(err))}</div>` + suggestionHtml();
             }
         }
 
         function escapeHtml(s) {
             if(!s) return '';
-            return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+
+        function debugHtml(status, dataObj, rawText) {
+            let html = '<div style="margin-top:12px">';
+            html += '<details><summary style="cursor:pointer">Show debug details</summary>';
+            html += `<div class="debug">Status: ${status || 'n/a'}\n`;
+            if (dataObj) {
+                html += 'JSON Response:\n' + escapeHtml(JSON.stringify(dataObj, null, 2)) + '\n';
+                if (dataObj.error && dataObj.error.debugId) html += '\nServer debugId: ' + escapeHtml(dataObj.error.debugId) + '\n';
+            } else if (rawText) {
+                html += 'Raw Response:\n' + escapeHtml(rawText) + '\n';
+            } else {
+                html += 'No response body was returned.\n';
+            }
+            html += '\nLogs: Check your server logs (Render dashboard or server console) and search for the debugId above if present.';
+            html += '</div></details></div>';
+            return html;
+        }
+
+        function suggestionHtml(){
+            return `<div class="small" style="margin-top:8px">Suggestions:\n<ul><li>Make sure the playlist is public and not age-restricted or private.</li><li>Try using a shorter limit (e.g., limit=5) and test with a known-public playlist.</li><li>If the server returns a debugId, check the server logs (Render dashboard &gt; Logs) and search that id.</li></ul></div>`;
         }
     </script>
 </body>

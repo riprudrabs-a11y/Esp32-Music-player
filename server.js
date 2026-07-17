@@ -30,6 +30,10 @@ function isNonEmptyString(v) {
   return typeof v === 'string' && v.trim().length > 0;
 }
 
+function generateDebugId() {
+  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8);
+}
+
 async function fetchPlaylist(playlistUrl, limit) {
   // Use cache to avoid repeated calls
   const cacheKey = `playlist:${playlistUrl}:limit:${limit}`;
@@ -61,6 +65,20 @@ function successResponse(data) {
   };
 }
 
+function errorResponse(err, debugId) {
+  // Avoid leaking full stack to clients; include a debugId to find logs
+  return {
+    success: false,
+    error: {
+      message: err && err.message ? err.message : 'Unknown error',
+      name: err && err.name ? err.name : 'Error',
+      debugId: debugId,
+      // If ytpl provides additional properties, include them under details (non-sensitive)
+      details: err && err.info ? err.info : undefined
+    }
+  };
+}
+
 // POST-based API (keeps compatibility with existing clients)
 app.post('/api/load-playlist', async (req, res) => {
   const playlistUrl = req.body && req.body.playlistUrl;
@@ -70,7 +88,7 @@ app.post('/api/load-playlist', async (req, res) => {
   if (limit > 200) limit = 200;
 
   if (!isNonEmptyString(playlistUrl)) {
-    return res.status(400).json({ success: false, error: 'Missing or invalid playlistUrl in request body.' });
+    return res.status(400).json({ success: false, error: { message: 'Missing or invalid playlistUrl in request body.' } });
   }
 
   try {
@@ -78,8 +96,10 @@ app.post('/api/load-playlist', async (req, res) => {
     const data = await fetchPlaylist(playlistUrl, limit);
     res.json(successResponse(data));
   } catch (err) {
-    console.error('CRITICAL ERROR IN LOAD-PLAYLIST:', err && err.message ? err.message : err);
-    res.status(500).json({ success: false, error: (err && err.message) || String(err) });
+    const debugId = generateDebugId();
+    // Log full error stack and debugId to server logs for investigation
+    console.error(`[${debugId}] CRITICAL ERROR IN LOAD-PLAYLIST:`, err && err.stack ? err.stack : err);
+    res.status(500).json(errorResponse(err, debugId));
   }
 });
 
@@ -93,7 +113,7 @@ app.get('/api/load-playlist', async (req, res) => {
   if (limit > 200) limit = 200;
 
   if (!isNonEmptyString(playlistUrl)) {
-    return res.status(400).json({ success: false, error: 'Missing or invalid playlistUrl in query string.' });
+    return res.status(400).json({ success: false, error: { message: 'Missing or invalid playlistUrl in query string.' } });
   }
 
   try {
@@ -101,8 +121,9 @@ app.get('/api/load-playlist', async (req, res) => {
     const data = await fetchPlaylist(playlistUrl, limit);
     res.json(successResponse(data));
   } catch (err) {
-    console.error('CRITICAL ERROR IN LOAD-PLAYLIST (GET):', err && err.message ? err.message : err);
-    res.status(500).json({ success: false, error: (err && err.message) || String(err) });
+    const debugId = generateDebugId();
+    console.error(`[${debugId}] CRITICAL ERROR IN LOAD-PLAYLIST (GET):`, err && err.stack ? err.stack : err);
+    res.status(500).json(errorResponse(err, debugId));
   }
 });
 
