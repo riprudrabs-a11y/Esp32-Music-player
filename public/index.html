@@ -13,199 +13,197 @@
       --ok: #2ecc71;
       --err: #ff6b6b;
       --glass: rgba(255,255,255,0.03);
-      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
     }
-    html,body { height:100%; margin:0; background:var(--bg); color:#fff; display:flex; align-items:center; justify-content:center; }
-    .wrap { width:min(980px,96%); }
-    .card { background:var(--card); border-radius:12px; padding:20px; box-shadow: 0 8px 30px rgba(0,0,0,0.6); }
-    h1 { margin:0 0 12px 0; font-size:18px; display:flex; gap:8px; align-items:center; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; background: var(--bg); color: #fff; font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; display: flex; align-items: center; justify-content: center; }
+    .wrap { width: min(1000px, 96%); }
+    .card { background: var(--card); border-radius: 12px; padding: 24px; box-shadow: 0 8px 30px rgba(0,0,0,0.6); }
+    h1 { margin: 0 0 16px 0; font-size: 20px; display: flex; gap: 8px; align-items: center; }
+    .subtitle { font-size: 12px; color: var(--muted); margin-left: 8px; }
     input[type=text], input[type=number] {
-      width:100%; padding:10px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.02); color:#fff;
-      box-sizing:border-box; margin-bottom:8px;
+      width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.02); color: #fff; margin-bottom: 10px;
     }
-    .row { display:flex; gap:8px; margin-bottom:8px; }
-    button { background:var(--accent); color:#fff; border:none; padding:10px 14px; border-radius:8px; cursor:pointer; font-weight:600; }
-    button.secondary { background:transparent; border:1px solid rgba(255,255,255,0.06); color:var(--muted); font-weight:600; }
-    .panel { background:var(--glass); padding:12px; border-radius:10px; margin-top:12px; min-height:80px; }
-    .tracks { max-height:360px; overflow:auto; margin-top:10px; border-radius:8px; }
-    .track { padding:10px; border-bottom:1px solid rgba(255,255,255,0.03); display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
-    .track .meta { max-width:80%; }
-    .small { font-size:12px; color:var(--muted); }
-    .copy-btn { background:#222; border-radius:6px; padding:6px 8px; color:#ddd; border:1px solid rgba(255,255,255,0.03); cursor:pointer; }
-    .error { background:rgba(255,0,0,0.06); color:var(--err); padding:10px;border-radius:8px;margin-top:8px; }
-    .ok { background:rgba(0,255,0,0.04); color:var(--ok); padding:10px;border-radius:8px;margin-top:8px; }
-    .spinner { width:18px;height:18px;border-radius:50%; border:3px solid rgba(255,255,255,0.08); border-top-color:var(--accent); animation:spin 1s linear infinite; display:inline-block; vertical-align:middle; margin-right:8px; }
-    @keyframes spin{ to{ transform:rotate(360deg); } }
-    .pager { display:flex; gap:8px; align-items:center; margin-top:8px; }
-    .debug { font-family:monospace; font-size:12px; color:#ddd; background:#0b0b0b; padding:10px; border-radius:8px; white-space:pre-wrap; margin-top:10px; max-height:220px; overflow:auto; }
+    .row { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+    button { background: var(--accent); color: #fff; border: none; padding: 10px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; white-space: nowrap; }
+    button:hover { opacity: 0.8; }
+    button.secondary { background: transparent; border: 1px solid rgba(255,255,255,0.06); color: var(--muted); }
+    .panel { background: var(--glass); padding: 14px; border-radius: 10px; margin: 14px 0; min-height: 60px; border-left: 3px solid var(--accent); }
+    .pager { display: flex; gap: 10px; align-items: center; margin: 14px 0; flex-wrap: wrap; }
+    .tracks { max-height: 500px; overflow-y: auto; border-radius: 8px; margin: 14px 0; }
+    .track { padding: 12px 14px; border-bottom: 1px solid rgba(255,255,255,0.03); display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; }
+    .track:hover { background: rgba(255,255,255,0.01); }
+    .track-info { min-width: 0; }
+    .track-num { font-size: 13px; color: var(--muted); }
+    .track-title { font-weight: 600; font-size: 14px; white-space: normal; word-break: break-word; }
+    .track-url { font-size: 11px; color: var(--muted); margin-top: 4px; word-break: break-all; font-family: monospace; }
+    .track-actions { display: flex; gap: 6px; }
+    .copy-btn { background: #222; border-radius: 6px; padding: 6px 10px; color: #ddd; border: 1px solid rgba(255,255,255,0.03); cursor: pointer; font-size: 12px; white-space: nowrap; }
+    .copy-btn:hover { background: #333; }
+    .error { background: rgba(255,0,0,0.06); color: var(--err); }
+    .ok { background: rgba(0,255,0,0.04); color: var(--ok); }
+    .spinner { width: 16px; height: 16px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--accent); animation: spin 0.8s linear infinite; display: inline-block; vertical-align: middle; margin-right: 8px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .debug { font-family: monospace; font-size: 11px; color: #bbb; background: #0b0b0b; padding: 12px; border-radius: 8px; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; }
+    details { cursor: pointer; }
+    summary { font-size: 12px; color: var(--muted); padding: 8px 0; user-select: none; }
+    summary:hover { color: #fff; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <h1>📺 Playlist Automation Hub <span class="small">— fetch playlists for your ESP32</span></h1>
+      <h1>📺 Playlist Hub <span class="subtitle">Fetch playlists for your ESP32</span></h1>
 
-      <input id="playlistUrl" type="text" placeholder="Paste YouTube playlist link (example: https://www.youtube.com/playlist?list=...)" />
+      <input id="playlistUrl" type="text" placeholder="Paste YouTube playlist link…" />
 
       <div class="row">
-        <input id="limit" type="number" min="1" max="500" value="50" style="width:120px" />
+        <input id="limit" type="number" min="1" max="500" value="50" style="width: 100px;" placeholder="Items per page" />
         <button id="loadBtn">🔄 Load Playlist</button>
-        <button id="previewPlayBtn" class="secondary">▶️ Preview first</button>
-        <button id="copyAllBtn" class="secondary">📋 Copy all mp3 links</button>
+        <button id="previewBtn" class="secondary">▶️ Preview</button>
+        <button id="copyAllBtn" class="secondary">📋 Copy Links</button>
       </div>
 
-      <div class="panel" id="statusPanel">Status: Ready</div>
+      <div class="panel" id="statusPanel">Ready to load playlists!</div>
 
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
-        <div class="small">Show results (page & limit)</div>
-        <div class="row" style="width:auto;">
-          <button id="prevPage" class="secondary">◀ Prev</button>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <input id="page" type="number" min="1" value="1" style="width:80px" />
-            <div class="small">page</div>
-          </div>
-          <button id="nextPage" class="secondary">Next ▶</button>
+      <div class="pager">
+        <button id="prevPage" class="secondary">◀ Prev</button>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input id="page" type="number" min="1" value="1" style="width: 70px;" />
+          <span style="font-size: 12px; color: var(--muted);">page</span>
         </div>
+        <button id="nextPage" class="secondary">Next ▶</button>
+        <span id="pageInfo" style="font-size: 12px; color: var(--muted); margin-left: auto;"></span>
       </div>
 
       <div class="tracks" id="tracks"></div>
 
-      <div id="debugWrap" style="margin-top:12px;">
-        <details>
-          <summary style="cursor:pointer;" class="small">🛠️ Show debug details</summary>
-          <div id="debug" class="debug">No debug info yet.</div>
-        </details>
-      </div>
+      <details>
+        <summary>🛠️ Debug Details</summary>
+        <div id="debug" class="debug">No debug info yet.</div>
+      </details>
     </div>
   </div>
 
 <script>
-  const loadBtn = document.getElementById('loadBtn');
-  const previewPlayBtn = document.getElementById('previewPlayBtn');
-  const copyAllBtn = document.getElementById('copyAllBtn');
-  const statusPanel = document.getElementById('statusPanel');
-  const tracksEl = document.getElementById('tracks');
-  const debugEl = document.getElementById('debug');
-  const pageInput = document.getElementById('page');
-  const limitInput = document.getElementById('limit');
-  const prevPage = document.getElementById('prevPage');
-  const nextPage = document.getElementById('nextPage');
+  const state = { lastData: null, lastUrl: null };
+  const els = {
+    url: document.getElementById('playlistUrl'),
+    limit: document.getElementById('limit'),
+    page: document.getElementById('page'),
+    status: document.getElementById('statusPanel'),
+    tracks: document.getElementById('tracks'),
+    debug: document.getElementById('debug'),
+    pageInfo: document.getElementById('pageInfo'),
+    loadBtn: document.getElementById('loadBtn'),
+    previewBtn: document.getElementById('previewBtn'),
+    copyAllBtn: document.getElementById('copyAllBtn'),
+    prevPage: document.getElementById('prevPage'),
+    nextPage: document.getElementById('nextPage'),
+  };
 
-  function setStatus(txt, type) {
-    if(type === 'loading') statusPanel.innerHTML = '<span class="spinner"></span>' + txt;
-    else if(type === 'error') statusPanel.innerHTML = '<span class="error">'+txt+'</span>';
-    else statusPanel.innerHTML = '<div class="small">'+txt+'</div>';
+  function setStatus(txt, type = 'info') {
+    if (type === 'loading') els.status.innerHTML = '<span class="spinner"></span>' + txt;
+    else if (type === 'error') els.status.innerHTML = `<div class="error">${txt}</div>`;
+    else els.status.innerHTML = `<div class="ok">${txt}</div>`;
   }
 
-  function escapeHtml(s){ if(!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function escapeHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
 
   async function loadPage() {
-    const url = document.getElementById('playlistUrl').value.trim();
-    if(!url){ setStatus('⚠️ Paste a playlist URL above.', 'error'); return; }
-    const limit = Number(limitInput.value) || 50;
-    const page = Math.max(1, Number(pageInput.value) || 1);
+    const url = els.url.value.trim();
+    if (!url) { setStatus('⚠️ Paste a YouTube playlist URL above.', 'error'); return; }
+    const limit = Math.max(1, Math.min(500, Number(els.limit.value) || 50));
+    const page = Math.max(1, Number(els.page.value) || 1);
     const start = (page - 1) * limit + 1;
-    setStatus(`Loading page ${page} (items ${start} - ${start + limit - 1})`, 'loading');
-    tracksEl.innerHTML = '';
+    setStatus(`Loading page ${page}…`, 'loading');
+    els.tracks.innerHTML = '';
 
     try {
-      // use start + limit query (server now supports start)
       const encoded = encodeURIComponent(url);
       const q = `/api/load-playlist?playlistUrl=${encoded}&start=${start}&limit=${limit}`;
       const resp = await fetch(q);
       const txt = await resp.text();
       let data;
-      try { data = txt ? JSON.parse(txt) : null; } catch(e) { setStatus('⚠️ Invalid JSON from server','error'); debugEl.textContent = txt; return; }
+      try { data = txt ? JSON.parse(txt) : null; } catch (e) { setStatus('⚠️ Invalid response from server', 'error'); els.debug.textContent = txt; return; }
+      els.debug.textContent = `HTTP ${resp.status}\n${JSON.stringify(data, null, 2)}`;
+      state.lastData = data;
+      state.lastUrl = url;
 
-      debugEl.textContent = `HTTP ${resp.status}\n${JSON.stringify(data, null, 2)}`;
-
-      if(resp.ok && data && data.success) {
+      if (resp.ok && data && data.success) {
         const tracks = data.tracks || (data.playlist && data.playlist.tracks) || (data.contents && data.contents.tracks) || [];
-        if(tracks.length === 0) {
-          setStatus('ℹ️ No tracks returned on this page. Try a lower page number or bigger limit.', 'error');
-          tracksEl.innerHTML = '';
-          return;
-        }
-        setStatus(`✅ Loaded ${tracks.length} tracks (page ${page}).`);
-        // render tracks
-        tracksEl.innerHTML = tracks.map((t,i) => {
+        if (tracks.length === 0) { setStatus('ℹ️ No tracks on this page. Try page 1 or lower the page number.', 'error'); els.pageInfo.textContent = ''; return; }
+        setStatus(`✅ Loaded ${tracks.length} track(s) (page ${page})`, 'ok');
+        els.pageInfo.textContent = `[${start}..${start + tracks.length - 1}]`;
+        // Render tracks with proper escaping
+        els.tracks.innerHTML = tracks.map((t, i) => {
+          const idx = start + i;
           const title = escapeHtml(t.title || 'Untitled');
           const mp3 = escapeHtml(t.mp3Url || t.url || 'n/a');
-          return `<div class="track">
-                    <div class="meta"><strong>${start + i}. ${title}</strong><div class="small">${mp3}</div></div>
-                    <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
-                      <button class="copy-btn" data-url="${mp3}" onclick="copyUrl(event)">📋 Copy</button>
-                      <a class="copy-btn" href="${t.mp3Url||t.url||'#'}" target="_blank">🔗 Open</a>
-                    </div>
-                  </div>`;
+          return `
+            <div class="track">
+              <div class="track-info">
+                <div class="track-num">#${idx}</div>
+                <div class="track-title">${title}</div>
+                <div class="track-url">${mp3}</div>
+              </div>
+              <div class="track-actions">
+                <button class="copy-btn" onclick="copyToClipboard(event, '${t.mp3Url || t.url || ''}')">📋</button>
+              </div>
+            </div>
+          `;
         }).join('');
       } else {
         const err = data && data.error && data.error.message ? data.error.message : `HTTP ${resp.status}`;
-        setStatus(`❌ Error: ${err}`, 'error');
+        setStatus(`❌ ${err}`, 'error');
+        els.pageInfo.textContent = '';
       }
     } catch (err) {
-      setStatus('⚠️ Network error: ' + (err && err.message ? err.message : String(err)), 'error');
-      debugEl.textContent = String(err);
+      setStatus(`⚠️ Error: ${escapeHtml(err && err.message ? err.message : String(err))}`, 'error');
+      els.pageInfo.textContent = '';
     }
   }
 
-  async function copyUrl(e) {
-    const btn = e.currentTarget;
-    const url = btn.getAttribute('data-url') || '';
+  window.copyToClipboard = async (e, url) => {
     try {
       await navigator.clipboard.writeText(url);
-      btn.textContent = '✅ Copied';
-      setTimeout(()=> btn.textContent = '📋 Copy', 1500);
-    } catch(e) {
+      const btn = e.currentTarget;
+      const orig = btn.textContent;
+      btn.textContent = '✅';
+      setTimeout(() => btn.textContent = orig, 1200);
+    } catch (e) {
       alert('Copy failed: ' + e.message);
     }
-  }
+  };
 
-  loadBtn.addEventListener('click', ()=>{ pageInput.value = 1; loadPage(); });
-  prevPage.addEventListener('click', ()=>{ pageInput.value = Math.max(1, Number(pageInput.value||1)-1); loadPage(); });
-  nextPage.addEventListener('click', ()=>{ pageInput.value = Number(pageInput.value||1)+1; loadPage(); });
+  els.loadBtn.addEventListener('click', () => { els.page.value = 1; loadPage(); });
+  els.prevPage.addEventListener('click', () => { els.page.value = Math.max(1, Number(els.page.value || 1) - 1); loadPage(); });
+  els.nextPage.addEventListener('click', () => { els.page.value = Number(els.page.value || 1) + 1; loadPage(); });
 
-  previewPlayBtn.addEventListener('click', async ()=> {
-    // preview first track by opening it in new tab (browser will try to play)
-    const url = document.getElementById('playlistUrl').value.trim();
-    if(!url){ setStatus('⚠️ Paste a playlist URL above.', 'error'); return; }
-    const encoded = encodeURIComponent(url);
-    const q = `/api/load-playlist?playlistUrl=${encoded}&start=1&limit=1`;
-    setStatus('Previewing first track…', 'loading');
-    try {
-      const r = await fetch(q);
-      const data = await r.json();
-      if(data && data.success && data.tracks && data.tracks[0]) {
-        window.open(data.tracks[0].mp3Url || data.tracks[0].url, '_blank');
-        setStatus('Opened first track in new tab.');
-      } else {
-        setStatus('No track to preview.', 'error');
-      }
-    } catch(e){ setStatus('Preview failed: ' + e.message, 'error'); }
+  els.previewBtn.addEventListener('click', async () => {
+    if (!state.lastData || !state.lastData.tracks || state.lastData.tracks.length === 0) {
+      setStatus('⚠️ Load a playlist first.', 'error');
+      return;
+    }
+    const track = state.lastData.tracks[0];
+    if (track && track.mp3Url) window.open(track.mp3Url, '_blank');
   });
 
-  copyAllBtn.addEventListener('click', async ()=> {
-    // fetch page 1..N based on limit and page=1 only (user can use next to copy more pages)
-    const url = document.getElementById('playlistUrl').value.trim();
-    if(!url){ setStatus('⚠️ Paste a playlist URL above.', 'error'); return; }
-    setStatus('Fetching current page to copy links…', 'loading');
+  els.copyAllBtn.addEventListener('click', async () => {
+    if (!state.lastData || !state.lastData.tracks) {
+      setStatus('⚠️ Load a playlist first.', 'error');
+      return;
+    }
+    const links = state.lastData.tracks.map(t => t.mp3Url || t.url || '').filter(Boolean).join('\n');
     try {
-      const encoded = encodeURIComponent(url);
-      const q = `/api/load-playlist?playlistUrl=${encoded}&start=1&limit=${limitInput.value||50}`;
-      const r = await fetch(q);
-      const data = await r.json();
-      if(data && data.success) {
-        const links = (data.tracks||[]).map(t => t.mp3Url || t.url || '').filter(Boolean).join('\n');
-        await navigator.clipboard.writeText(links);
-        setStatus('✅ Copied current page mp3 links to clipboard.');
-      } else {
-        setStatus('Failed to fetch links to copy.', 'error');
-      }
-    } catch(e){ setStatus('Copy failed: ' + e.message, 'error'); }
+      await navigator.clipboard.writeText(links);
+      setStatus(`✅ Copied ${state.lastData.tracks.length} mp3 links to clipboard.`, 'ok');
+    } catch (e) {
+      setStatus('⚠️ Copy failed: ' + e.message, 'error');
+    }
   });
-
-  // expose copyUrl to inline onclick
-  window.copyUrl = copyUrl;
 </script>
 </body>
 </html>
