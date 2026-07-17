@@ -1,12 +1,12 @@
 {
-  "name": "playlist-automation-dashboard",
+  "name": "esp32-music-player",
   "version": "1.0.0",
-  "description": "Web dashboard for managing offline playlists and automation rules",
   "main": "server.js",
+  "dependencies": {
+    "express": "^4.18.2",
+    "ytpl": "^2.3.0"
+  },
   "scripts": {
     "start": "node server.js"
-  },
-  "dependencies": {
-    "express": "^4.19.2"
   }
 }
