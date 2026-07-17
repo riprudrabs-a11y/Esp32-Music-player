@@ -3,8 +3,7 @@ const ytpl = require('ytpl');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const NodeCache = require('node-cache');
-const ytdlp = require('yt-dlp-exec');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -36,20 +35,31 @@ function generateDebugId() {
   return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8);
 }
 
-async function getPlaylistWithYtDlp(playlistUrl, limit = 50) {
-  // Use yt-dlp to get JSON metadata. yt-dlp-exec maps options to CLI flags.
-  try {
-    const stdout = await ytdlp(playlistUrl, { dumpSingleJson: true, flatPlaylist: true, playlistEnd: limit });
-    const j = typeof stdout === 'string' ? JSON.parse(stdout) : stdout;
-    const items = Array.isArray(j.entries) ? j.entries : [];
-    const playlist = {
-      title: j.title || null,
-      items: items.map(it => ({ id: it.id, title: it.title || it.title_placeholder || it.id, url: it.url || null }))
-    };
-    return playlist;
-  } catch (err) {
-    throw err;
-  }
+function getPlaylistWithYtDlp(playlistUrl, limit = 50) {
+  // Call the yt-dlp CLI (must be installed on the host) and return parsed JSON
+  return new Promise((resolve, reject) => {
+    const args = ['-J', '--flat-playlist', '--playlist-end', String(limit), playlistUrl];
+    // Increase maxBuffer in case playlist JSON is large
+    execFile('yt-dlp', args, { maxBuffer: 20 * 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) {
+        // include stderr in the error for debugging
+        err.stderr = stderr ? String(stderr).slice(0, 2000) : undefined;
+        return reject(err);
+      }
+      try {
+        const j = JSON.parse(stdout);
+        const items = Array.isArray(j.entries) ? j.entries : [];
+        const playlist = {
+          title: j.title || null,
+          items: items.map(it => ({ id: it.id, title: it.title || it.title_placeholder || it.id, url: it.url || null }))
+        };
+        resolve(playlist);
+      } catch (e) {
+        e.stdout = stdout ? String(stdout).slice(0, 2000) : undefined;
+        return reject(e);
+      }
+    });
+  });
 }
 
 async function fetchPlaylist(playlistUrl, limit) {
@@ -99,7 +109,7 @@ function errorResponse(err, debugId) {
       message: err && err.message ? err.message : 'Unknown error',
       name: err && err.name ? err.name : 'Error',
       debugId: debugId,
-      details: err && err.info ? err.info : undefined
+      details: err && err.stderr ? err.stderr : undefined
     }
   };
 }
@@ -122,7 +132,7 @@ app.post('/api/load-playlist', async (req, res) => {
     res.json(successResponse(data));
   } catch (err) {
     const debugId = generateDebugId();
-    console.error(`[${debugId}] CRITICAL ERROR IN LOAD-PLAYLIST:`, err && err.stack ? err.stack : err);
+    console.error(`[${debugId}] CRITICAL ERROR IN LOAD-PLAYLIST:`, err && (err.stack || err.stderr) ? (err.stack || err.stderr) : err);
     res.status(500).json(errorResponse(err, debugId));
   }
 });
@@ -146,7 +156,7 @@ app.get('/api/load-playlist', async (req, res) => {
     res.json(successResponse(data));
   } catch (err) {
     const debugId = generateDebugId();
-    console.error(`[${debugId}] CRITICAL ERROR IN LOAD-PLAYLIST (GET):`, err && err.stack ? err.stack : err);
+    console.error(`[${debugId}] CRITICAL ERROR IN LOAD-PLAYLIST (GET):`, err && (err.stack || err.stderr) ? (err.stack || err.stderr) : err);
     res.status(500).json(errorResponse(err, debugId));
   }
 });
@@ -161,13 +171,11 @@ app.get('/api/stream', (req, res) => {
   console.log(`Streaming video ${id}`);
 
   // Spawn yt-dlp binary (must be available in the environment). This pipes raw audio to the response.
-  // Note: On some hosts you may need to adjust the command or install yt-dlp in build steps.
   const proc = spawn('yt-dlp', ['-o', '-', '-f', 'bestaudio', '--no-playlist', videoUrl], { stdio: ['ignore', 'pipe', 'pipe'] });
 
-  // If yt-dlp isn't available, return error quickly
   proc.on('error', (err) => {
     console.error('yt-dlp spawn error:', err);
-    res.status(500).send('Server streaming error: yt-dlp not available');
+    if (!res.headersSent) res.status(500).send('Server streaming error: yt-dlp not available');
   });
 
   // Header: best-effort audio content type
@@ -177,7 +185,6 @@ app.get('/api/stream', (req, res) => {
   proc.stdout.pipe(res);
 
   proc.stderr.on('data', (d) => {
-    // log but don't expose to client
     console.error('yt-dlp stderr:', d.toString().slice(0,200));
   });
 
