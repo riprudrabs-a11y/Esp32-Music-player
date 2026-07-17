@@ -3,6 +3,8 @@ const ytpl = require('ytpl');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const NodeCache = require('node-cache');
+const ytdlp = require('yt-dlp-exec');
+const { spawn } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,13 +36,37 @@ function generateDebugId() {
   return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8);
 }
 
+async function getPlaylistWithYtDlp(playlistUrl, limit = 50) {
+  // Use yt-dlp to get JSON metadata. yt-dlp-exec maps options to CLI flags.
+  try {
+    const stdout = await ytdlp(playlistUrl, { dumpSingleJson: true, flatPlaylist: true, playlistEnd: limit });
+    const j = typeof stdout === 'string' ? JSON.parse(stdout) : stdout;
+    const items = Array.isArray(j.entries) ? j.entries : [];
+    const playlist = {
+      title: j.title || null,
+      items: items.map(it => ({ id: it.id, title: it.title || it.title_placeholder || it.id, url: it.url || null }))
+    };
+    return playlist;
+  } catch (err) {
+    throw err;
+  }
+}
+
 async function fetchPlaylist(playlistUrl, limit) {
   // Use cache to avoid repeated calls
   const cacheKey = `playlist:${playlistUrl}:limit:${limit}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const playlist = await ytpl(playlistUrl, { limit });
+  let playlist;
+  try {
+    playlist = await ytpl(playlistUrl, { limit });
+  } catch (err) {
+    console.warn('ytpl failed, trying yt-dlp fallback:', err && err.message ? err.message : err);
+    // fallback to yt-dlp
+    playlist = await getPlaylistWithYtDlp(playlistUrl, limit);
+  }
+
   const tracks = (playlist.items || [])
     .filter(item => item && item.id)
     .map(item => ({
@@ -73,7 +99,6 @@ function errorResponse(err, debugId) {
       message: err && err.message ? err.message : 'Unknown error',
       name: err && err.name ? err.name : 'Error',
       debugId: debugId,
-      // If ytpl provides additional properties, include them under details (non-sensitive)
       details: err && err.info ? err.info : undefined
     }
   };
@@ -85,7 +110,7 @@ app.post('/api/load-playlist', async (req, res) => {
   let limit = Number(req.body && req.body.limit) || 50;
 
   if (!Number.isFinite(limit) || limit < 1) limit = 1;
-  if (limit > 200) limit = 200;
+  if (limit > 500) limit = 500; // allow larger requests but cap them
 
   if (!isNonEmptyString(playlistUrl)) {
     return res.status(400).json({ success: false, error: { message: 'Missing or invalid playlistUrl in request body.' } });
@@ -97,7 +122,6 @@ app.post('/api/load-playlist', async (req, res) => {
     res.json(successResponse(data));
   } catch (err) {
     const debugId = generateDebugId();
-    // Log full error stack and debugId to server logs for investigation
     console.error(`[${debugId}] CRITICAL ERROR IN LOAD-PLAYLIST:`, err && err.stack ? err.stack : err);
     res.status(500).json(errorResponse(err, debugId));
   }
@@ -110,7 +134,7 @@ app.get('/api/load-playlist', async (req, res) => {
   let limit = Number(req.query && req.query.limit) || 50;
 
   if (!Number.isFinite(limit) || limit < 1) limit = 1;
-  if (limit > 200) limit = 200;
+  if (limit > 500) limit = 500;
 
   if (!isNonEmptyString(playlistUrl)) {
     return res.status(400).json({ success: false, error: { message: 'Missing or invalid playlistUrl in query string.' } });
@@ -125,6 +149,41 @@ app.get('/api/load-playlist', async (req, res) => {
     console.error(`[${debugId}] CRITICAL ERROR IN LOAD-PLAYLIST (GET):`, err && err.stack ? err.stack : err);
     res.status(500).json(errorResponse(err, debugId));
   }
+});
+
+// Stream endpoint: proxy audio via yt-dlp for a given video id
+// Example: /api/stream?id=VIDEO_ID
+app.get('/api/stream', (req, res) => {
+  const id = req.query && req.query.id;
+  if (!id) return res.status(400).send('Missing id');
+
+  const videoUrl = `https://www.youtube.com/watch?v=${id}`;
+  console.log(`Streaming video ${id}`);
+
+  // Spawn yt-dlp binary (must be available in the environment). This pipes raw audio to the response.
+  // Note: On some hosts you may need to adjust the command or install yt-dlp in build steps.
+  const proc = spawn('yt-dlp', ['-o', '-', '-f', 'bestaudio', '--no-playlist', videoUrl], { stdio: ['ignore', 'pipe', 'pipe'] });
+
+  // If yt-dlp isn't available, return error quickly
+  proc.on('error', (err) => {
+    console.error('yt-dlp spawn error:', err);
+    res.status(500).send('Server streaming error: yt-dlp not available');
+  });
+
+  // Header: best-effort audio content type
+  res.setHeader('Content-Type', 'audio/mpeg');
+  res.setHeader('Transfer-Encoding', 'chunked');
+
+  proc.stdout.pipe(res);
+
+  proc.stderr.on('data', (d) => {
+    // log but don't expose to client
+    console.error('yt-dlp stderr:', d.toString().slice(0,200));
+  });
+
+  req.on('close', () => {
+    if (!proc.killed) proc.kill('SIGKILL');
+  });
 });
 
 app.get('/health', (req, res) => res.json({ ok: true }));
