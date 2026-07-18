@@ -8,40 +8,32 @@ const { execFile, spawn } = require('child_process');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// In-memory cache for playlists (5 min)
 const cache = new NodeCache({ stdTTL: 300, checkperiod: 60 });
 
-// In-memory settings (lost on restart – we'll use a file later if needed)
 let settings = {
   playlistUrl: '',
-  volume: 50,          // 0-100
-  bluetoothDevice: ''  // name or MAC
+  volume: 50,
+  bluetoothDevice: ''
 };
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(express.static('public'));
 
-// CORS
 app.use(cors({ origin: process.env.CORS_ORIGIN || true }));
 
-// Rate limiter (30 req/min)
 const limiter = rateLimit({ windowMs: 60 * 1000, max: 30, standardHeaders: true, legacyHeaders: false });
 app.use('/api/', limiter);
 
-// ---------- Helper functions ----------
-function isNonEmptyString(v) {
-  return typeof v === 'string' && v.trim().length > 0;
-}
+// ---------- Helpers ----------
+function isNonEmptyString(v) { return typeof v === 'string' && v.trim().length > 0; }
+function generateDebugId() { return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8); }
 
-function generateDebugId() {
-  return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2,8);
-}
-
-// ---------- Playlist fetching (ytpl + yt-dlp fallback) ----------
-function getPlaylistWithYtDlp(playlistUrl, limit = 50) {
+// ---------- Playlist fetching with start & limit ----------
+function getPlaylistWithYtDlp(playlistUrl, start = 1, limit = 50) {
   return new Promise((resolve, reject) => {
-    const args = ['-J', '--flat-playlist', '--playlist-end', String(limit), playlistUrl];
+    const end = start + limit - 1;
+    const args = ['-J', '--flat-playlist', '--playlist-start', String(start), '--playlist-end', String(end), playlistUrl];
     execFile('yt-dlp', args, { maxBuffer: 20 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) {
         err.stderr = stderr ? String(stderr).slice(0, 2000) : undefined;
@@ -63,24 +55,31 @@ function getPlaylistWithYtDlp(playlistUrl, limit = 50) {
   });
 }
 
-async function fetchPlaylist(playlistUrl, limit) {
-  const cacheKey = `playlist:${playlistUrl}:limit:${limit}`;
+async function fetchPlaylist(playlistUrl, start = 1, limit = 50) {
+  const cacheKey = `playlist:${playlistUrl}:start:${start}:limit:${limit}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
   let playlist;
   try {
-    playlist = await ytpl(playlistUrl, { limit });
+    // ytpl doesn't support start, so we fetch more and slice manually
+    const total = start + limit - 1;
+    const raw = await ytpl(playlistUrl, { limit: total });
+    // Slice the items from start-1 to start-1+limit
+    const sliced = raw.items.slice(start - 1, start - 1 + limit);
+    playlist = {
+      title: raw.title,
+      items: sliced
+    };
   } catch (err) {
     console.warn('ytpl failed, trying yt-dlp fallback:', err.message);
-    playlist = await getPlaylistWithYtDlp(playlistUrl, limit);
+    playlist = await getPlaylistWithYtDlp(playlistUrl, start, limit);
   }
 
   const tracks = (playlist.items || [])
     .filter(item => item && item.id)
     .map(item => ({
       title: item.title || 'Unknown title',
-      // 🔥 FIX: use /api/stream endpoint instead of third‑party proxy
       mp3Url: `/api/stream?id=${item.id}`,
       id: item.id,
       url: item.url || null,
@@ -113,10 +112,11 @@ function errorResponse(err, debugId) {
 }
 
 // ---------- API endpoints ----------
-// Load playlist (POST & GET)
 app.post('/api/load-playlist', async (req, res) => {
   const playlistUrl = req.body?.playlistUrl;
+  let start = Number(req.body?.start) || 1;
   let limit = Number(req.body?.limit) || 50;
+  if (!Number.isFinite(start) || start < 1) start = 1;
   if (!Number.isFinite(limit) || limit < 1) limit = 1;
   if (limit > 500) limit = 500;
 
@@ -125,7 +125,7 @@ app.post('/api/load-playlist', async (req, res) => {
   }
 
   try {
-    const data = await fetchPlaylist(playlistUrl, limit);
+    const data = await fetchPlaylist(playlistUrl, start, limit);
     res.json(successResponse(data));
   } catch (err) {
     const debugId = generateDebugId();
@@ -136,7 +136,9 @@ app.post('/api/load-playlist', async (req, res) => {
 
 app.get('/api/load-playlist', async (req, res) => {
   const playlistUrl = req.query?.playlistUrl;
+  let start = Number(req.query?.start) || 1;
   let limit = Number(req.query?.limit) || 50;
+  if (!Number.isFinite(start) || start < 1) start = 1;
   if (!Number.isFinite(limit) || limit < 1) limit = 1;
   if (limit > 500) limit = 500;
 
@@ -145,7 +147,7 @@ app.get('/api/load-playlist', async (req, res) => {
   }
 
   try {
-    const data = await fetchPlaylist(playlistUrl, limit);
+    const data = await fetchPlaylist(playlistUrl, start, limit);
     res.json(successResponse(data));
   } catch (err) {
     const debugId = generateDebugId();
@@ -154,44 +156,28 @@ app.get('/api/load-playlist', async (req, res) => {
   }
 });
 
-// 🔥 NEW: Stream audio via yt-dlp (reliable)
+// /api/stream (unchanged)
 app.get('/api/stream', (req, res) => {
   const id = req.query?.id;
   if (!id) return res.status(400).send('Missing video id');
-
   const videoUrl = `https://www.youtube.com/watch?v=${id}`;
   console.log(`Streaming video ${id}`);
-
   const proc = spawn('yt-dlp', ['-o', '-', '-f', 'bestaudio', '--no-playlist', videoUrl], {
     stdio: ['ignore', 'pipe', 'pipe']
   });
-
   proc.on('error', (err) => {
     console.error('yt-dlp spawn error:', err);
     if (!res.headersSent) res.status(500).send('Streaming error: yt-dlp not available');
   });
-
   res.setHeader('Content-Type', 'audio/mpeg');
   res.setHeader('Transfer-Encoding', 'chunked');
-
   proc.stdout.pipe(res);
-
-  proc.stderr.on('data', (d) => {
-    console.error('yt-dlp stderr:', d.toString().slice(0, 200));
-  });
-
-  req.on('close', () => {
-    if (!proc.killed) proc.kill('SIGKILL');
-  });
+  proc.stderr.on('data', (d) => console.error('yt-dlp stderr:', d.toString().slice(0, 200)));
+  req.on('close', () => { if (!proc.killed) proc.kill('SIGKILL'); });
 });
 
-// ---------- Settings endpoints (for ESP32) ----------
-// GET current settings
-app.get('/api/settings', (req, res) => {
-  res.json({ success: true, settings });
-});
-
-// POST to update settings (e.g., from website)
+// Settings endpoints (unchanged)
+app.get('/api/settings', (req, res) => res.json({ success: true, settings }));
 app.post('/api/settings', (req, res) => {
   const { playlistUrl, volume, bluetoothDevice } = req.body || {};
   if (playlistUrl !== undefined) settings.playlistUrl = playlistUrl;
@@ -203,9 +189,6 @@ app.post('/api/settings', (req, res) => {
   res.json({ success: true, settings });
 });
 
-// Health check
 app.get('/health', (req, res) => res.json({ ok: true }));
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
