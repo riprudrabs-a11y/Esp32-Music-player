@@ -213,7 +213,7 @@
 
   function escapeHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-  // ---------- Load & render tracks ----------
+  // ---------- Load & render tracks with start ----------
   async function loadPage() {
     const url = playlistUrl.value.trim();
     if (!url) { setStatus('⚠️ Please paste a playlist URL.', 'err'); return; }
@@ -221,12 +221,12 @@
     const page = Math.max(1, Number(pageInput.value) || 1);
     const start = (page - 1) * limit + 1;
 
-    setStatus(`⏳ Loading page ${page}...`, 'loading');
+    setStatus(`⏳ Loading page ${page} (items ${start}–${start+limit-1})...`, 'loading');
     tracksEl.innerHTML = '';
 
     try {
       const encoded = encodeURIComponent(url);
-      const resp = await fetch(`/api/load-playlist?playlistUrl=${encoded}&limit=${limit}`);
+      const resp = await fetch(`/api/load-playlist?playlistUrl=${encoded}&start=${start}&limit=${limit}`);
       const txt = await resp.text();
       let data;
       try { data = txt ? JSON.parse(txt) : null; } catch (e) { data = null; }
@@ -235,16 +235,9 @@
       state.lastUrl = url;
 
       if (resp.ok && data && data.success) {
-        // Extract tracks from various possible keys
         let tracks = data.tracks || data.playlist?.tracks || data.contents?.tracks || [];
-        // If the server returned all tracks, we need to slice based on start
-        if (tracks.length > 0 && !data.playlist?.tracks) {
-          // we requested limited items, but if server returned more, slice
-          if (tracks.length > limit) tracks = tracks.slice(0, limit);
-        }
-
         if (tracks.length === 0) {
-          setStatus('ℹ️ No tracks on this page. Try page 1.', 'err');
+          setStatus('ℹ️ No tracks on this page. Try a smaller page number.', 'err');
           pageInfo.textContent = '';
           return;
         }
@@ -265,7 +258,6 @@
           </div>`;
         }).join('');
 
-        // Save the playlist URL in localStorage so it persists
         localStorage.setItem('lastPlaylistUrl', url);
       } else {
         const errMsg = data?.error?.message || `HTTP ${resp.status}`;
@@ -287,7 +279,7 @@
     });
   };
 
-  // ---------- Save settings to server ----------
+  // ---------- Save settings ----------
   async function saveSettings() {
     const playlist = playlistUrl.value.trim();
     const volume = Number(volumeSlider.value);
@@ -302,7 +294,6 @@
       const data = await resp.json();
       if (data.success) {
         setStatus('✅ Settings saved to server!', 'ok');
-        // Also store locally
         localStorage.setItem('lastPlaylistUrl', playlist);
         localStorage.setItem('lastVolume', volume);
         localStorage.setItem('lastBtDevice', device);
@@ -314,9 +305,8 @@
     }
   }
 
-  // ---------- Load saved settings from localStorage and server ----------
+  // ---------- Load saved settings ----------
   async function loadSettings() {
-    // From localStorage first
     const savedUrl = localStorage.getItem('lastPlaylistUrl') || '';
     const savedVol = localStorage.getItem('lastVolume');
     const savedBt = localStorage.getItem('lastBtDevice') || '';
@@ -327,7 +317,6 @@
     }
     if (savedBt) btDevice.value = savedBt;
 
-    // Then fetch from server (to get the latest values the ESP32 might have used)
     try {
       const resp = await fetch('/api/settings');
       const data = await resp.json();
@@ -336,7 +325,6 @@
         if (s.playlistUrl) playlistUrl.value = s.playlistUrl;
         if (s.volume !== undefined) { volumeSlider.value = s.volume; volumeDisplay.textContent = s.volume + '%'; }
         if (s.bluetoothDevice) btDevice.value = s.bluetoothDevice;
-        // Update localStorage to match server
         localStorage.setItem('lastPlaylistUrl', s.playlistUrl || '');
         localStorage.setItem('lastVolume', s.volume || 50);
         localStorage.setItem('lastBtDevice', s.bluetoothDevice || '');
@@ -365,7 +353,6 @@
 
   // ---------- Initialize ----------
   loadSettings();
-  // If there's a saved playlist, load it automatically
   if (playlistUrl.value.trim()) {
     loadPage();
   }
